@@ -1,15 +1,16 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import uvicorn
-import os
-from typing import Optional
 import logging
+from typing import Optional
+from dotenv import load_dotenv
 
 from openai_query_converter import OpenAIQueryConverter
 from earth_engine_handler import EarthEngineHandler
 
+load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,6 @@ async def submit_query(query_request: QueryRequest):
     try:
         logger.info(f"Processing query: {query_request.query}")
         
-        # Convert natural language to Earth Engine code
         ee_code = await openai_converter.convert_query_to_code(query_request.query)
         
         if not ee_code:
@@ -55,7 +55,6 @@ async def submit_query(query_request: QueryRequest):
         
         logger.info(f"Generated Earth Engine code: {ee_code[:200]}...")
         
-        # Execute Earth Engine code and get visualization data
         result = await ee_handler.execute_query(ee_code)
         
         if not result.get('success'):
@@ -83,7 +82,6 @@ async def submit_query(query_request: QueryRequest):
 async def root():
     return FileResponse("/Users/Yifan/deeper-seek/frontend_old/geoguessr.html")
 
-# Mount static files for frontend assets
 app.mount("/frontend_old", StaticFiles(directory="frontend_old"), name="frontend_old")
 
 @app.get("/health")
