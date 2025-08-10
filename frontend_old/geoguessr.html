@@ -698,13 +698,19 @@
 
         <!-- Query Text Box - Right Side -->
         <div id="query-container" class="query-container">
-            <div class="query-header" style="text-align: center;">Ask a question about this location</div>
-            <textarea id="query-textarea" class="query-textarea" placeholder="e.g., What country is this? What landmarks can you see? What's the climate like here?"></textarea>
+            <div class="query-header" style="text-align: center;">AI-Powered Earth Engine Analysis</div>
+            <textarea id="query-textarea" class="query-textarea" placeholder="Ask about this location or describe an Earth Engine analysis (e.g., 'Show night-time lights trend over the last decade', 'Display vegetation changes', 'Find areas with water')"></textarea>
             <div style="display:flex; gap:8px; margin-top:12px;">
-                <button id="query-button" class="query-button" style="flex:1;">Send Query</button>
-                <button id="similarity-heatmap-btn" class="query-button" style="background:#10b981; flex:1;">Similarity Heatmap</button>
+                <button id="query-button" onclick="submitQuery()" class="query-button" style="flex:1;">🤖 AI Earth Engine Query</button>
+                <button id="similarity-heatmap-btn" onclick="searchAndGenerateHeatmap()" class="query-button" style="background:#10b981; flex:1;">🗺️ Similarity Heatmap</button>
             </div>
             <div id="query-response" class="query-response"></div>
+            <div id="generated-code" class="mt-2 hidden" style="margin-top: 8px; display: none;">
+                <details style="background: #f5f5f5; border-radius: 4px; padding: 8px;">
+                    <summary style="cursor: pointer; font-weight: 500; font-size: 12px;">View Generated Earth Engine Code</summary>
+                    <pre id="code-display" style="margin-top: 8px; font-size: 10px; background: #1a1a1a; color: #00ff00; padding: 8px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap;"></pre>
+                </details>
+            </div>
         </div>
 
         <!-- Map Container - Bottom Right Corner -->
@@ -2888,38 +2894,32 @@
                 }
             }
 
-        // Function to submit a query about the current location
+        // Function to submit a query for Earth Engine analysis
         function submitQuery() {
             const queryText = document.getElementById('query-textarea').value.trim();
             const queryButton = document.getElementById('query-button');
             const queryResponse = document.getElementById('query-response');
+            const generatedCodeDiv = document.getElementById('generated-code');
+            const codeDisplay = document.getElementById('code-display');
 
             if (!queryText) {
-                showNotification("Please enter a question");
-                return;
-            }
-
-            if (!currentImagePath) {
-                showNotification("No image loaded. Please wait for the next location.");
+                showNotification("Please enter a query");
                 return;
             }
 
             // Disable button and show loading state
             queryButton.disabled = true;
-            queryButton.textContent = "Sending...";
-            queryResponse.textContent = "Processing your query...";
+            queryButton.textContent = "🤖 Generating...";
+            queryResponse.textContent = "Converting your query to Earth Engine code...";
+            if (generatedCodeDiv) {
+                generatedCodeDiv.style.display = 'none';
+            }
 
-            // Prepare the query data
+            // Prepare the query data for Earth Engine analysis
             const queryData = {
                 query: queryText,
-                image_path: currentImagePath,
-                full_image_path: fullImagePath
+                type: 'earth_engine'
             };
-
-            // Add lobby ID if in multiplayer mode
-            if (lobbyId) {
-                queryData.lobby_id = lobbyId;
-            }
 
             // Send the query to the server
             fetch('/submit_query', {
@@ -2931,20 +2931,111 @@
             })
             .then(response => response.json())
             .then(data => {
-                if (data.success) {
-                    queryResponse.textContent = data.response;
+                if (data.success && data.earth_engine_code) {
+                    queryResponse.textContent = "✅ Earth Engine code generated successfully! Executing...";
+                    
+                    // Display the generated code
+                    if (codeDisplay) {
+                        codeDisplay.textContent = data.earth_engine_code;
+                        generatedCodeDiv.style.display = 'block';
+                    }
+                    
+                    // Execute the Earth Engine code
+                    executeEarthEngineCode(data.earth_engine_code);
+                    
                 } else {
-                    queryResponse.textContent = "Error: " + (data.error || "Failed to process query");
+                    queryResponse.textContent = "❌ Error: " + (data.error || "Failed to generate Earth Engine code");
                 }
             })
             .catch(error => {
                 console.error('Error submitting query:', error);
-                queryResponse.textContent = "Error: Failed to send query. Please try again.";
+                queryResponse.textContent = "❌ Error: Failed to send query. Please try again.";
             })
             .finally(() => {
                 // Re-enable button
                 queryButton.disabled = false;
-                queryButton.textContent = "Send Query";
+                queryButton.textContent = "🤖 AI Earth Engine Query";
+            });
+        }
+
+        // Function to safely execute Earth Engine code
+        function executeEarthEngineCode(code) {
+            const queryResponse = document.getElementById('query-response');
+            
+            try {
+                // Ensure Earth Engine is initialized
+                if (typeof ee === 'undefined') {
+                    queryResponse.textContent = "❌ Error: Earth Engine not available. Please refresh the page.";
+                    return;
+                }
+
+                if (!geospatialInitialized) {
+                    queryResponse.textContent = "⏳ Initializing Earth Engine...";
+                    initializeEarthEngine().then(() => {
+                        executeEarthEngineCodeSafely(code);
+                    }).catch(err => {
+                        queryResponse.textContent = "❌ Error: Failed to initialize Earth Engine: " + err.message;
+                    });
+                } else {
+                    executeEarthEngineCodeSafely(code);
+                }
+            } catch (error) {
+                queryResponse.textContent = "❌ Error executing code: " + error.message;
+                console.error('Earth Engine execution error:', error);
+            }
+        }
+
+        function executeEarthEngineCodeSafely(code) {
+            const queryResponse = document.getElementById('query-response');
+            
+            try {
+                // Replace Map references with earthEngineMap for compatibility
+                const adaptedCode = code.replace(/\bMap\./g, 'earthEngineMap.');
+                
+                // Execute the code in a controlled environment
+                const wrappedCode = `
+                    (function() {
+                        var Map = earthEngineMap;
+                        ${adaptedCode}
+                    })();
+                `;
+                
+                // Use eval in a controlled way
+                eval(wrappedCode);
+                
+                queryResponse.textContent = "✅ Earth Engine analysis complete! Check the map for results.";
+                
+            } catch (error) {
+                queryResponse.textContent = "❌ Error executing Earth Engine code: " + error.message;
+                console.error('Code execution error:', error);
+            }
+        }
+
+        // Promise-based Earth Engine initialization for async/await usage
+        function initializeEarthEngine() {
+            return new Promise((resolve, reject) => {
+                if (geospatialInitialized && earthEngineMap) {
+                    resolve();
+                    return;
+                }
+                
+                try {
+                    ee.initialize({
+                        apiKey: EARTH_ENGINE_API_KEY,
+                        authToken: null
+                    }, () => {
+                        try {
+                            initializeGeospatialMap();
+                            resolve();
+                        } catch (e) {
+                            reject(e);
+                        }
+                    }, (err) => {
+                        reject(new Error('Earth Engine initialization failed: ' + err));
+                    });
+                } catch (e) {
+                    reject(e);
+                }
             });
         }
 
