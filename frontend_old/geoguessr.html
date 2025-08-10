@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeepSeeker GeoGuessr Challenge</title>
+    <title>DeepSeeker</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- Google Earth Engine API -->
@@ -110,41 +110,52 @@
         .query-container {
             position: absolute;
             right: 24px;
-            top: 80px;
+            top: 30px; /* Moved upwards as requested */
             width: 384px; /* Same width as map (w-96 = 24rem = 384px) */
-            height: calc(100vh - 380px); /* Full height minus top space, map height, and bottom controls */
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(8px);
+            height: calc(100vh - 330px); /* Adjusted height for new position */
+            background: rgba(255, 255, 255, 0.3); /* More translucent glass effect */
+            backdrop-filter: blur(12px); /* Enhanced blur for glass effect */
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             z-index: 25;
             display: flex;
             flex-direction: column;
             padding: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.2); /* Subtle border for glass effect */
         }
 
         .query-header {
             font-weight: bold;
-            color: #374151;
+            color: white; /* White text as requested */
             margin-bottom: 12px;
-            font-size: 14px;
+            font-size: 18px; /* Bigger font as requested */
+            /* Removed text shadow as requested */
         }
 
         .query-textarea {
             flex: 1;
-            border: 1px solid #d1d5db;
+            border: 1px solid rgba(255, 255, 255, 0.3);
             border-radius: 6px;
             padding: 12px;
             font-size: 14px;
             resize: none;
             outline: none;
             font-family: inherit;
-            background: white;
+            background: rgba(255, 255, 255, 0.2); /* Translucent background */
+            backdrop-filter: blur(8px); /* Glass effect */
+            color: white; /* White text as requested */
         }
 
         .query-textarea:focus {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.6);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+            background: rgba(255, 255, 255, 0.3); /* Slightly more opaque when focused */
+            color: white; /* Keep white text when focused */
+        }
+
+        /* Style for placeholder text */
+        .query-textarea::placeholder {
+            color: rgba(255, 255, 255, 0.8); /* White placeholder text */
         }
 
         .query-button {
@@ -171,13 +182,15 @@
         .query-response {
             margin-top: 12px;
             padding: 12px;
-            background: #f3f4f6;
+            background: rgba(243, 244, 246, 0.4); /* Translucent background */
+            backdrop-filter: blur(8px); /* Glass effect */
             border-radius: 6px;
             font-size: 13px;
-            color: #374151;
+            color: #1f2937; /* Darker text for better contrast */
             max-height: 200px;
             overflow-y: auto;
-            border-left: 4px solid #3b82f6;
+            border-left: 4px solid rgba(59, 130, 246, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.2); /* Subtle border */
         }
 
         .query-response:empty {
@@ -299,8 +312,9 @@
 
         /* Controls bar */
         .controls-bar {
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(8px);
+            /* Removed dark background to eliminate blur effect */
+            /* background: rgba(0, 0, 0, 0.7); */
+            /* backdrop-filter: blur(8px); */
         }
 
         /* Responsive street view image */
@@ -600,37 +614,18 @@
             <!-- Logo and Round Info -->
             <div class="flex items-center space-x-4">
                 <div class="flex items-center">
-                    <i class="fas fa-map-marker-alt text-yellow-400 text-2xl mr-2"></i>
-                    <h1 class="text-white text-lg font-semibold hidden sm:block">DeepSeeker GeoGuessr</h1>
+                    <i class="fas fa-map-marker-alt text-yellow-400 text-4xl mr-3"></i>
+                    <h1 class="text-white text-2xl font-bold hidden sm:block">DeepSeeker</h1>
                 </div>
 
-                <!-- Round Indicator Dots -->
-                <div class="round-indicator ml-4">
-                    <div class="round-dot" id="round-dot-1"></div>
-                    <div class="round-dot" id="round-dot-2"></div>
-                    <div class="round-dot" id="round-dot-3"></div>
-                    <div class="round-dot" id="round-dot-4"></div>
-                    <div class="round-dot" id="round-dot-5"></div>
-                </div>
+                <!-- Round Indicator Dots - Removed as requested -->
             </div>
 
-            <!-- Score Display with multiplayer-sensitive class -->
-            <div class="score-panel px-4 py-2 flex gap-4 multiplayer-sensitive">
-                <div class="text-white">
-                    You: <span id="user-score" class="font-bold">0</span>
-                </div>
-                <div class="text-white">
-                    DeepSeeker: <span id="ai-score" class="font-bold">0</span>
-                </div>
-                <div class="text-white text-xs opacity-70" title="Press ESC for multiplayer">
-                    <i class="fas fa-users"></i>
-                </div>
-            </div>
+            <!-- Score Display - Removed as requested -->
         </div>
 
         <!-- Geospatial Heatmap - Left Side -->
         <div id="geospatial-container" class="geospatial-container">
-            <div class="geospatial-header">Geospatial Similarity Heatmap</div>
             <div id="geospatial-map" class="geospatial-map">
                 <div class="geospatial-loading">Loading Earth Engine...</div>
             </div>
@@ -909,7 +904,7 @@
                 .catch(error => {
                     console.error('Error loading image:', error);
                     document.getElementById('loader-container').style.display = 'none';
-                    showNotification("Error loading image. Please try again.");
+                    // Removed error notification as requested
                 });
 
             // Reset the allPlayersGuessed flag when loading a new image
@@ -1585,10 +1580,7 @@
                 attribution: '&copy; <a href="https://www.esri.com/">Esri</a>'
             }).addTo(fallbackMap);
 
-            // Add zoom control
-            L.control.zoom({
-                position: 'topright'
-            }).addTo(fallbackMap);
+            // Zoom control removed as requested
 
             // Add click handler
             fallbackMap.on('click', function(e) {
@@ -1664,8 +1656,7 @@
             // Hide the lobby screen and start directly in single player mode
             document.getElementById('lobby-screen').style.display = 'none';
             
-            // Initialize the round indicator
-            updateRoundIndicator();
+            // Round indicator removed as requested
 
             // Initialize Earth Engine (with fallback)
             setTimeout(() => {
@@ -1694,10 +1685,7 @@
                 minZoom: 2
             }).setView([0, 0], 2);
 
-            // Add zoom control to the top-right corner
-            L.control.zoom({
-                position: 'topright'
-            }).addTo(map);
+            // Zoom control removed as requested
 
             // Add tile layer (OpenStreetMap)
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
