@@ -622,6 +622,9 @@
                 <div class="text-white">
                     DeepSeeker: <span id="ai-score" class="font-bold">0</span>
                 </div>
+                <div class="text-white text-xs opacity-70" title="Press ESC for multiplayer">
+                    <i class="fas fa-users"></i>
+                </div>
             </div>
         </div>
 
@@ -1658,6 +1661,9 @@
 
         // Initialize the map
         document.addEventListener('DOMContentLoaded', function () {
+            // Hide the lobby screen and start directly in single player mode
+            document.getElementById('lobby-screen').style.display = 'none';
+            
             // Initialize the round indicator
             updateRoundIndicator();
 
@@ -1710,8 +1716,8 @@
 
             // Map toggle button removed
 
-            // Load the first image
-            loadNewImage();
+            // Start the game directly in single player mode
+            startSinglePlayerGame();
 
             // Set up button event listeners
             document.getElementById('submit-guess').addEventListener('click', submitGuess);
@@ -1748,6 +1754,14 @@
                         showNotification("Place a marker on the map before submitting your guess");
                         event.preventDefault();
                     }
+                }
+                
+                // Escape key (key code 27) to show game mode selection
+                if (event.keyCode === 27 || event.key === 'Escape') {
+                    document.getElementById('lobby-screen').style.display = 'flex';
+                    document.getElementById('game-mode-selection').style.display = 'flex';
+                    document.getElementById('lobby-controls').style.display = 'none';
+                    document.getElementById('lobby-info').style.display = 'none';
                 }
             });
 
