@@ -1,0 +1,40 @@
+{
+  "name": "satellite-embeddings-similarity-search",
+  "version": "1.0.0",
+  "description": "Interactive web application for satellite imagery similarity search using Google Earth Engine embeddings",
+  "main": "index.html",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "dev": "python3 -m http.server 8000",
+    "build": "echo 'Static site - no build required'",
+    "deploy": "echo 'Deploy to your preferred hosting service'",
+    "lint": "eslint app.js",
+    "format": "prettier --write *.js *.css *.html"
+  },
+  "keywords": [
+    "satellite",
+    "earth-engine",
+    "embeddings",
+    "similarity-search",
+    "gis",
+    "remote-sensing"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "eslint": "^8.0.0",
+    "prettier": "^2.8.0"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/satellite-embeddings-similarity-search.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/satellite-embeddings-similarity-search/issues"
+  },
+  "homepage": "https://yourusername.github.io/satellite-embeddings-similarity-search"
+}
