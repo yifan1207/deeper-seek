@@ -7,6 +7,9 @@
     <title>DeepSeeker GeoGuessr Challenge</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Google Earth Engine API -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://earthengine.google.com/api/ee_api_js.js"></script>
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Tailwind CSS -->
@@ -82,14 +85,7 @@
             animation: spin 1s linear infinite;
         }
 
-        /* Map toggle button animation */
-        .map-toggle-btn {
-            transition: transform 0.3s ease;
-        }
-
-        .map-toggle-btn.active {
-            transform: rotate(180deg);
-        }
+        /* Map toggle button removed */
 
         /* Map container transition */
         .map-container {
@@ -121,7 +117,7 @@
             backdrop-filter: blur(8px);
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            z-index: 15;
+            z-index: 25;
             display: flex;
             flex-direction: column;
             padding: 16px;
@@ -188,13 +184,93 @@
             display: none;
         }
 
-        /* Keep hover effects but respect enlarged state */
-        .map-container:hover:not(.collapsed):not(.enlarged) {
-            transform: scale(1.15);
-            z-index: 30 !important;
-            /* Increase z-index on hover to make sure it's on top */
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+        /* Geospatial Heatmap Container - Full Background */
+        .geospatial-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: transparent;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 0;
         }
+
+        .geospatial-header {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            font-size: 16px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 8px 12px;
+            border-radius: 6px;
+        }
+
+        .geospatial-map {
+            flex: 1;
+            border: none;
+            border-radius: 0;
+            overflow: hidden;
+            background: transparent;
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        .geospatial-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            gap: 8px;
+            z-index: 10;
+        }
+
+        .geospatial-button {
+            background: rgba(59, 130, 246, 0.9);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .geospatial-button:hover {
+            background: #2563eb;
+        }
+
+        .geospatial-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .geospatial-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 16px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 12px 20px;
+            border-radius: 8px;
+            z-index: 20;
+        }
+
+        /* Keep hover effects but respect enlarged state */
+        /* Removed hover expansion effect */
 
         /* Round indicator dots */
         .round-indicator {
@@ -263,6 +339,14 @@
                 right: 5vw;
             }
 
+            .geospatial-container {
+                width: 100vw;
+                left: 0;
+                top: 0;
+                height: 100vh;
+                z-index: 1;
+            }
+
             .query-container {
                 width: 80vw;
                 right: 10vw;
@@ -290,6 +374,14 @@
                 width: 90vw;
                 height: 35vh;
                 right: 5vw;
+            }
+
+            .geospatial-container {
+                width: 100vw;
+                left: 0;
+                top: 0;
+                height: 100vh;
+                padding: 0;
             }
 
             .query-container {
@@ -504,7 +596,7 @@
         </div>
 
         <!-- Top Navigation Bar -->
-        <div class="absolute top-0 left-0 right-0 py-3 px-4 flex justify-between items-center">
+        <div class="absolute top-0 left-0 right-0 py-3 px-4 flex justify-between items-center z-40">
             <!-- Logo and Round Info -->
             <div class="flex items-center space-x-4">
                 <div class="flex items-center">
@@ -533,6 +625,18 @@
             </div>
         </div>
 
+        <!-- Geospatial Heatmap - Left Side -->
+        <div id="geospatial-container" class="geospatial-container">
+            <div class="geospatial-header">Geospatial Similarity Heatmap</div>
+            <div id="geospatial-map" class="geospatial-map">
+                <div class="geospatial-loading">Loading Earth Engine...</div>
+            </div>
+            <div class="geospatial-controls">
+                <button id="geospatial-refresh" class="geospatial-button">Refresh</button>
+                <button id="geospatial-toggle" class="geospatial-button">Toggle View</button>
+            </div>
+        </div>
+
         <!-- Query Text Box - Right Side -->
         <div id="query-container" class="query-container">
             <div class="query-header">Ask a question about this location:</div>
@@ -541,15 +645,9 @@
             <div id="query-response" class="query-response"></div>
         </div>
 
-        <!-- Map Container - Bottom Right Corner with Toggle -->
-        <div id="map-container" class="absolute right-6 bottom-6 w-96 h-64 z-20 map-container">
+        <!-- Map Container - Bottom Right Corner -->
+        <div id="map-container" class="absolute right-6 bottom-6 w-96 h-64 z-30 map-container">
             <div id="map" class="w-full h-full"></div>
-
-            <!-- Map Toggle Button -->
-            <button id="map-toggle"
-                class="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-white p-2 rounded-full shadow-lg z-10 map-toggle-btn">
-                <i class="fas fa-chevron-up"></i>
-            </button>
 
             <!-- Fullscreen Toggle Button -->
             <button id="fullscreen-toggle" class="fullscreen-toggle">
@@ -573,12 +671,12 @@
 
         <!-- Compass -->
         <div
-            class="absolute top-20 right-6 bg-white bg-opacity-80 w-10 h-10 rounded-full flex items-center justify-center shadow-md z-10">
+            class="absolute top-20 right-6 bg-white bg-opacity-80 w-10 h-10 rounded-full flex items-center justify-center shadow-md z-35">
             <i class="fas fa-compass text-primary text-xl"></i>
         </div>
 
         <!-- Bottom Controls Bar -->
-        <div class="absolute bottom-0 left-0 right-0 controls-bar py-3 px-6 flex justify-center space-x-6">
+        <div class="absolute bottom-0 left-0 right-0 controls-bar py-3 px-6 flex justify-center space-x-6 z-40">
             <button id="submit-guess"
                 class="bg-primary hover:bg-primary-dark text-white font-bold py-2 px-6 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed transition transform hover:-translate-y-1"
                 disabled>
@@ -650,6 +748,9 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script>
+        // Google Earth Engine API Key
+        const EARTH_ENGINE_API_KEY = 'AIzaSyByEBj0Z4wzn-xgA0xKQFYf0qrV2nmWCTE';
+        
         let map, marker, modelMarker, actualMarker;
         let userGuessCoords = null;
         let modelPrediction = null;
@@ -664,6 +765,11 @@
         let maxRounds = 5;
         let roundsHistory = []; // Store results of each round
         let mapExpanded = true; // Track if map is expanded or collapsed
+
+        // Geospatial variables
+        let earthEngineMap = null;
+        let geospatialInitialized = false;
+        let currentHeatmapPoint = null;
 
         let playerId = Math.random().toString(36).substr(2, 9);
         let lobbyId = null;
@@ -818,6 +924,11 @@
 
             // Clear query response for new image
             clearQueryResponse();
+
+            // Refresh geospatial heatmap for new image
+            if (geospatialInitialized) {
+                refreshGeospatialMap();
+            }
         }
 
         // Enhanced initializeSocket function with all necessary socket events for multiplayer
@@ -1423,10 +1534,143 @@
             }
         });
 
+        // Initialize Google Earth Engine
+        function initializeEarthEngine() {
+            try {
+                // Initialize Earth Engine with proper configuration
+                ee.initialize({
+                    apiKey: EARTH_ENGINE_API_KEY,
+                    authToken: null
+                }, function() {
+                    console.log('Earth Engine initialized successfully');
+                    geospatialInitialized = true;
+                    initializeGeospatialMap();
+                }, function(error) {
+                    console.error('Earth Engine initialization failed:', error);
+                    document.querySelector('.geospatial-loading').textContent = 'Earth Engine failed to load';
+                    // Fallback to a simple map
+                    initializeFallbackMap();
+                });
+
+            } catch (error) {
+                console.error('Failed to initialize Earth Engine:', error);
+                document.querySelector('.geospatial-loading').textContent = 'Failed to load Earth Engine';
+                // Fallback to a simple map
+                initializeFallbackMap();
+            }
+        }
+
+        // Fallback map using Leaflet
+        function initializeFallbackMap() {
+            const mapContainer = document.getElementById('geospatial-map');
+            mapContainer.innerHTML = '';
+            
+            // Create a simple Leaflet map as fallback
+            const fallbackMap = L.map(mapContainer, {
+                zoomControl: false,
+                doubleClickZoom: false,
+                worldCopyJump: true,
+                maxBounds: [[-90, -180], [90, 180]],
+                maxBoundsViscosity: 1.0,
+                minZoom: 2
+            }).setView([0, 0], 2);
+
+            // Add satellite tile layer for better appearance
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                noWrap: true,
+                attribution: '&copy; <a href="https://www.esri.com/">Esri</a>'
+            }).addTo(fallbackMap);
+
+            // Add zoom control
+            L.control.zoom({
+                position: 'topright'
+            }).addTo(fallbackMap);
+
+            // Add click handler
+            fallbackMap.on('click', function(e) {
+                generateFallbackHeatmap(e.latlng);
+            });
+
+            // Store reference
+            earthEngineMap = fallbackMap;
+            geospatialInitialized = true;
+
+            // Hide loading message
+            document.querySelector('.geospatial-loading').style.display = 'none';
+        }
+
+        // Generate fallback heatmap
+        function generateFallbackHeatmap(latlng) {
+            if (!geospatialInitialized) return;
+
+            currentHeatmapPoint = latlng;
+            
+            // Show loading
+            document.querySelector('.geospatial-loading').style.display = 'block';
+            document.querySelector('.geospatial-loading').textContent = 'Generating heatmap...';
+
+            // Create a more sophisticated heatmap effect
+            const heatmapLayer = L.layerGroup();
+            
+            // Generate points with geographic clustering (more realistic)
+            const numPoints = 100;
+            const baseLat = latlng.lat;
+            const baseLng = latlng.lng;
+            
+            for (let i = 0; i < numPoints; i++) {
+                // Create clusters around the clicked point
+                const clusterRadius = 15; // degrees
+                const angle = (i / numPoints) * 2 * Math.PI;
+                const distance = Math.random() * clusterRadius;
+                
+                const randomLat = baseLat + Math.cos(angle) * distance * Math.random();
+                const randomLng = baseLng + Math.sin(angle) * distance * Math.random();
+                
+                // Calculate intensity based on distance from center
+                const distanceFromCenter = Math.sqrt(
+                    Math.pow(randomLat - baseLat, 2) + Math.pow(randomLng - baseLng, 2)
+                );
+                const intensity = Math.max(0, 1 - (distanceFromCenter / clusterRadius));
+                
+                // Add some randomness to make it more realistic
+                const finalIntensity = intensity * (0.5 + Math.random() * 0.5);
+                
+                const circle = L.circle([randomLat, randomLng], {
+                    radius: 30000 + (finalIntensity * 100000),
+                    fillColor: finalIntensity > 0.8 ? '#FCFDBF' : 
+                              finalIntensity > 0.6 ? '#FDAE78' : 
+                              finalIntensity > 0.4 ? '#EE605E' : 
+                              finalIntensity > 0.2 ? '#B63679' : '#711F81',
+                    color: 'transparent',
+                    fillOpacity: 0.4 + (finalIntensity * 0.4)
+                });
+                
+                heatmapLayer.addLayer(circle);
+            }
+
+            // Add to map
+            earthEngineMap.addLayer(heatmapLayer);
+
+            // Hide loading
+            document.querySelector('.geospatial-loading').style.display = 'none';
+        }
+
         // Initialize the map
         document.addEventListener('DOMContentLoaded', function () {
             // Initialize the round indicator
             updateRoundIndicator();
+
+            // Initialize Earth Engine (with fallback)
+            setTimeout(() => {
+                if (typeof ee !== 'undefined' && ee.initialize) {
+                    console.log('Earth Engine library found, initializing...');
+                    initializeEarthEngine();
+                } else {
+                    console.log('Earth Engine not available, using fallback map');
+                    initializeFallbackMap();
+                }
+            }, 2000);
 
             map = L.map('map', {
                 zoomControl: false,
@@ -1464,8 +1708,7 @@
                 }
             });
 
-            // Set up map toggle button
-            document.getElementById('map-toggle').addEventListener('click', toggleMap);
+            // Map toggle button removed
 
             // Load the first image
             loadNewImage();
@@ -1594,6 +1837,10 @@
                     }
                 }
             });
+
+            // Add geospatial functionality
+            document.getElementById('geospatial-refresh').addEventListener('click', refreshGeospatialMap);
+            document.getElementById('geospatial-toggle').addEventListener('click', toggleGeospatialView);
 
             // Add query functionality
             document.getElementById('query-button').addEventListener('click', submitQuery);
@@ -2295,10 +2542,140 @@
             }
         }
 
-        // Add function to fetch and display available lobbies
-        function fetchAvailableLobbies() {
-            socket.emit('get_lobbies');
+                    // Add function to fetch and display available lobbies
+            function fetchAvailableLobbies() {
+                socket.emit('get_lobbies');
+            }
+
+                    // Initialize geospatial map
+        function initializeGeospatialMap() {
+            if (!geospatialInitialized) return;
+
+            const mapContainer = document.getElementById('geospatial-map');
+            mapContainer.innerHTML = '';
+
+            try {
+                // Create Earth Engine map using the proper API
+                earthEngineMap = ee.Map({
+                    target: mapContainer,
+                    center: [0, 0],
+                    zoom: 2
+                });
+
+                // Add satellite base layer
+                const satelliteLayer = ee.ImageCollection('USGS/SRTMGL1_003')
+                    .select('elevation')
+                    .mosaic();
+
+                earthEngineMap.addLayer(satelliteLayer, {
+                    min: 0,
+                    max: 3000,
+                    palette: ['006633', 'E5FFCC', '662A00', 'D8D8D8', 'F5F5F5']
+                }, 'Elevation');
+
+                // Add click handler for heatmap generation
+                earthEngineMap.onClick(function(coords) {
+                    generateHeatmap(coords);
+                });
+
+                // Hide loading message
+                document.querySelector('.geospatial-loading').style.display = 'none';
+            } catch (error) {
+                console.error('Error initializing Earth Engine map:', error);
+                // Fallback to Leaflet map
+                initializeFallbackMap();
+            }
         }
+
+            // Generate similarity heatmap
+            function generateHeatmap(coords) {
+                if (!geospatialInitialized) return;
+
+                currentHeatmapPoint = coords;
+                
+                // Show loading
+                document.querySelector('.geospatial-loading').style.display = 'block';
+                document.querySelector('.geospatial-loading').textContent = 'Generating heatmap...';
+
+                try {
+                    // Earth Engine code for similarity search
+                    const embeddings = ee.ImageCollection('GOOGLE/SATELLITE_EMBEDDING/V1/ANNUAL');
+                    const YEAR = 2024;
+                    const dateFilter = ee.Filter.date(YEAR + '-01-01', (YEAR + 1) + '-01-01');
+                    const mosaic = embeddings.filter(dateFilter).mosaic();
+                    const bandNames = mosaic.bandNames();
+
+                    // Create point geometry
+                    const point = ee.Geometry.Point([coords.lon, coords.lat]);
+
+                    // Calculate similarity using dot product
+                    const similarity = ee.ImageCollection(
+                        mosaic.sample({ region: point, scale: 10 }).map(function (f) {
+                            return ee.Image(f.toArray(bandNames))
+                                .arrayFlatten(ee.List([bandNames]))
+                                .multiply(mosaic)
+                                .reduce('sum');
+                        })
+                    );
+
+                    // Add similarity layer to map
+                    earthEngineMap.addLayer(similarity, {
+                        palette: ['000004', '2C105C', '711F81', 'B63679', 'EE605E', 'FDAE78', 'FCFDBF', 'FFFFFF'],
+                        min: 0,
+                        max: 1
+                    }, 'Similarity Heatmap');
+
+                    // Hide loading
+                    document.querySelector('.geospatial-loading').style.display = 'none';
+                } catch (error) {
+                    console.error('Error generating heatmap:', error);
+                    document.querySelector('.geospatial-loading').textContent = 'Error generating heatmap';
+                    setTimeout(() => {
+                        document.querySelector('.geospatial-loading').style.display = 'none';
+                    }, 2000);
+                }
+            }
+
+            // Refresh geospatial map
+            function refreshGeospatialMap() {
+                if (!geospatialInitialized) return;
+                
+                // Check if it's an Earth Engine map or fallback map
+                if (earthEngineMap && earthEngineMap.layers) {
+                    // Earth Engine map
+                    earthEngineMap.layers().reset();
+                    
+                    // Re-add base layer
+                    const baseLayer = ee.ImageCollection('USGS/SRTMGL1_003')
+                        .select('elevation')
+                        .mosaic();
+
+                    earthEngineMap.addLayer(baseLayer, {
+                        min: 0,
+                        max: 3000,
+                        palette: ['006633', 'E5FFCC', '662A00', 'D8D8D8', 'F5F5F5']
+                    });
+                } else if (earthEngineMap && earthEngineMap.eachLayer) {
+                    // Leaflet fallback map
+                    earthEngineMap.eachLayer((layer) => {
+                        if (layer instanceof L.LayerGroup) {
+                            earthEngineMap.removeLayer(layer);
+                        }
+                    });
+                }
+
+                currentHeatmapPoint = null;
+            }
+
+            // Toggle geospatial view
+            function toggleGeospatialView() {
+                const container = document.getElementById('geospatial-container');
+                if (container.style.display === 'none') {
+                    container.style.display = 'flex';
+                } else {
+                    container.style.display = 'none';
+                }
+            }
 
         // Function to submit a query about the current location
         function submitQuery() {
