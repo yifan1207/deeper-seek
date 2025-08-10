@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Satellite Embeddings Similarity Search</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyByEBj0Z4wzn-xgA0xKQFYf0qrV2nmWCTE"></script>
+    <!-- Earth Engine JavaScript API -->
+    <script src="https://earthengine.google.com/api/ee_api_js.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1 class="title">Satellite Embeddings Similarity Search</h1>
+                <p class="subtitle">Click anywhere on the map to find similar satellite imagery using AI embeddings</p>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Map Container -->
+            <div class="map-container">
+                <div id="map"></div>
+                <div class="map-overlay">
+                    <div class="loading-spinner" id="loadingSpinner">
+                        <div class="spinner"></div>
+                        <p>Loading Earth Engine...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Control Panel -->
+            <div class="control-panel">
+                <div class="panel-section">
+                    <h3>Settings</h3>
+                    <div class="control-group">
+                        <label for="yearSelect">Year:</label>
+                        <select id="yearSelect">
+                            <option value="2024">2024</option>
+                            <option value="2023">2023</option>
+                            <option value="2022">2022</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="paletteSelect">Color Palette:</label>
+                        <select id="paletteSelect">
+                            <option value="viridis">Viridis</option>
+                            <option value="plasma">Plasma</option>
+                            <option value="inferno">Inferno</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3>Legend</h3>
+                    <div id="legend" class="legend">
+                        <div class="legend-title">Similarity in embedding space</div>
+                        <div class="legend-bar">
+                            <div class="legend-gradient" id="legendGradient"></div>
+                        </div>
+                        <div class="legend-labels">
+                            <span>Less similar</span>
+                            <span>More similar</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3>Selected Point</h3>
+                    <div id="selectedPoint" class="selected-point">
+                        <p class="coordinates" id="coordinates">Click on the map to select a point</p>
+                        <div class="thumbnail-container" id="thumbnailContainer">
+                            <div class="placeholder">No point selected</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3>Info</h3>
+                    <div class="info-content">
+                        <p>This tool uses Google Earth Engine's satellite embeddings to find similar imagery patterns across the globe.</p>
+                        <p><strong>How to use:</strong></p>
+                        <ol>
+                            <li>Click anywhere on the map</li>
+                            <li>Wait for similarity calculation</li>
+                            <li>Explore similar regions highlighted in color</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <p>&copy; 2024 Satellite Embeddings Similarity Search. Powered by Google Earth Engine.</p>
+                <div class="footer-links">
+                    <a href="#" onclick="showAbout()">About</a>
+                    <a href="#" onclick="showHelp()">Help</a>
+                    <a href="https://developers.google.com/earth-engine" target="_blank">Earth Engine Docs</a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Modal for About -->
+    <div id="aboutModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('aboutModal')">&times;</span>
+            <h2>About This Tool</h2>
+            <p>This interactive visualization tool demonstrates the power of satellite imagery embeddings for finding similar patterns across the Earth's surface.</p>
+            <p>The tool uses:</p>
+            <ul>
+                <li>Google Earth Engine's satellite embeddings</li>
+                <li>Sentinel-2 imagery for visualization</li>
+                <li>Cloud Score Plus for quality filtering</li>
+                <li>Cosine similarity in embedding space</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Modal for Help -->
+    <div id="helpModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('helpModal')">&times;</span>
+            <h2>How to Use</h2>
+            <ol>
+                <li><strong>Select a point:</strong> Click anywhere on the satellite imagery</li>
+                <li><strong>Wait for processing:</strong> The system calculates similarity across the globe</li>
+                <li><strong>Interpret results:</strong> Similar areas are highlighted in bright colors</li>
+                <li><strong>Explore:</strong> Zoom and pan to explore different regions</li>
+            </ol>
+            <p><strong>Color interpretation:</strong></p>
+            <ul>
+                <li>Bright colors = High similarity to selected point</li>
+                <li>Dark colors = Low similarity to selected point</li>
+            </ul>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
