@@ -1,0 +1,2752 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepSeeker</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Google Earth Engine API -->
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://earthengine.google.com/api/ee_api_js.js"></script>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        !function (t, e) { var o, n, p, r; e.__SV || (window.posthog = e, e._i = [], e.init = function (i, s, a) { function g(t, e) { var o = e.split("."); 2 == o.length && (t = t[o[0]], e = o[1]), t[e] = function () { t.push([e].concat(Array.prototype.slice.call(arguments, 0))) } } (p = t.createElement("script")).type = "text/javascript", p.crossOrigin = "anonymous", p.async = !0, p.src = s.api_host.replace(".i.posthog.com", "-assets.i.posthog.com") + "/static/array.js", (r = t.getElementsByTagName("script")[0]).parentNode.insertBefore(p, r); var u = e; for (void 0 !== a ? u = e[a] = [] : a = "posthog", u.people = u.people || [], u.toString = function (t) { var e = "posthog"; return "posthog" !== a && (e += "." + a), t || (e += " (stub)"), e }, u.people.toString = function () { return u.toString(1) + ".people (stub)" }, o = "init me ys Ss gs ws capture je Di xs register register_once register_for_session unregister unregister_for_session Rs getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey canRenderSurveyAsync identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty Is ks createPersonProfile Ps bs opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing $s debug Es getPageViewId captureTraceFeedback captureTraceMetric".split(" "), n = 0; n < o.length; n++)g(u, o[n]); e._i.push([i, s, a]) }, e.__SV = 1) }(document, window.posthog || []);
+        posthog.init('phc_6pOZtlKQ06xh0oSG7SNtjIJn3pAExQvqgFabcdYU96z', {
+            api_host: 'https://us.i.posthog.com',
+            person_profiles: 'identified_only', // or 'always' to create profiles for anonymous users as well
+        })
+    </script>
+    <!-- Add favicon to prevent 404 error -->
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🗺️</text></svg>"
+        type="image/svg+xml">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            DEFAULT: '#3b82f6',
+                            dark: '#2563eb',
+                            light: '#93c5fd',
+                        },
+                        secondary: {
+                            DEFAULT: '#6b7280',
+                            dark: '#4b5563',
+                            light: '#9ca3af',
+                        },
+                        success: {
+                            DEFAULT: '#10b981',
+                            dark: '#059669',
+                        },
+                        danger: {
+                            DEFAULT: '#ef4444',
+                            dark: '#dc2626',
+                        },
+                        warning: {
+                            DEFAULT: '#f59e0b',
+                            dark: '#d97706',
+                        }
+                    },
+                    boxShadow: {
+                        card: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                    },
+                },
+            }
+        };
+    </script>
+    <style>
+        /* Leaflet-specific styles and any additional custom styling */
+        .leaflet-container {
+            height: 100%;
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Animation for loader */
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .spin {
+            animation: spin 1s linear infinite;
+        }
+
+        /* Map toggle button removed */
+
+        /* Map container transition */
+        .map-container {
+            transition: all 0.3s ease;
+            transform-origin: bottom right;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border-radius: 8px;
+        }
+
+        .map-container.collapsed {
+            transform: translateY(calc(100% - 40px));
+        }
+
+        /* Add enlarged map state for post-guess view */
+        .map-container.enlarged {
+            width: 500px !important;
+            height: 400px !important;
+            z-index: 25 !important;
+        }
+
+        /* Query text box styles */
+        .query-container {
+            position: absolute;
+            right: 24px;
+            top: 30px; /* Moved upwards as requested */
+            width: 384px; /* Same width as map (w-96 = 24rem = 384px) */
+            height: calc(100vh - 330px); /* Adjusted height for new position */
+            background: rgba(255, 255, 255, 0.3); /* More translucent glass effect */
+            backdrop-filter: blur(12px); /* Enhanced blur for glass effect */
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 25;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.2); /* Subtle border for glass effect */
+        }
+
+        .query-header {
+            font-weight: bold;
+            color: white; /* White text as requested */
+            margin-bottom: 12px;
+            font-size: 18px; /* Bigger font as requested */
+            /* Removed text shadow as requested */
+        }
+
+        .query-textarea {
+            flex: 1;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 14px;
+            resize: none;
+            outline: none;
+            font-family: inherit;
+            background: rgba(255, 255, 255, 0.2); /* Translucent background */
+            backdrop-filter: blur(8px); /* Glass effect */
+            color: white; /* White text as requested */
+        }
+
+        .query-textarea:focus {
+            border-color: rgba(59, 130, 246, 0.6);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+            background: rgba(255, 255, 255, 0.3); /* Slightly more opaque when focused */
+            color: white; /* Keep white text when focused */
+        }
+
+        /* Style for placeholder text */
+        .query-textarea::placeholder {
+            color: rgba(255, 255, 255, 0.8); /* White placeholder text */
+        }
+
+        .query-button {
+            margin-top: 12px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .query-button:hover {
+            background: #2563eb;
+        }
+
+        .query-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .query-response {
+            margin-top: 12px;
+            padding: 12px;
+            background: rgba(243, 244, 246, 0.4); /* Translucent background */
+            backdrop-filter: blur(8px); /* Glass effect */
+            border-radius: 6px;
+            font-size: 13px;
+            color: #1f2937; /* Darker text for better contrast */
+            max-height: 200px;
+            overflow-y: auto;
+            border-left: 4px solid rgba(59, 130, 246, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.2); /* Subtle border */
+        }
+
+        .query-response:empty {
+            display: none;
+        }
+
+        /* Geospatial Heatmap Container - Full Background */
+        .geospatial-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: transparent;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+        }
+
+        .geospatial-header {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            font-size: 16px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 8px 12px;
+            border-radius: 6px;
+        }
+
+        .geospatial-map {
+            flex: 1;
+            border: none;
+            border-radius: 0;
+            overflow: hidden;
+            background: transparent;
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        .geospatial-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            gap: 8px;
+            z-index: 10;
+        }
+
+        .geospatial-button {
+            background: rgba(59, 130, 246, 0.9);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .geospatial-button:hover {
+            background: #2563eb;
+        }
+
+        .geospatial-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .geospatial-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 16px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 12px 20px;
+            border-radius: 8px;
+            z-index: 20;
+        }
+
+        /* Keep hover effects but respect enlarged state */
+        /* Removed hover expansion effect */
+
+        /* Round indicator dots */
+        .round-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .round-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.4);
+        }
+
+        .round-dot.active {
+            background-color: white;
+        }
+
+        /* Score panel */
+        .score-panel {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            border-radius: 8px;
+        }
+
+        /* Controls bar */
+        .controls-bar {
+            /* Removed dark background to eliminate blur effect */
+            /* background: rgba(0, 0, 0, 0.7); */
+            /* backdrop-filter: blur(8px); */
+        }
+
+        /* Responsive street view image */
+        .street-view-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            /* Use viewport height to ensure full height */
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #000;
+        }
+
+        .street-view-image {
+            max-width: 100%;
+            max-height: 100vh;
+            object-fit: contain;
+            /* Changed from cover to contain for better aspect ratio */
+            margin: 0;
+        }
+
+        /* For smaller screens */
+        @media (max-width: 768px) {
+            .map-container {
+                width: 80vw;
+                height: 40vh;
+                right: 10vw;
+                bottom: 5vh;
+            }
+
+            .map-container.enlarged {
+                width: 90vw !important;
+                height: 50vh !important;
+                right: 5vw;
+            }
+
+            .geospatial-container {
+                width: 100vw;
+                left: 0;
+                top: 0;
+                height: 100vh;
+                z-index: 1;
+            }
+
+            .query-container {
+                width: 80vw;
+                right: 10vw;
+                top: 70px;
+                height: calc(100vh - 300px);
+                z-index: 10;
+            }
+
+            .controls-bar {
+                flex-direction: column;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.5rem;
+            }
+
+            .street-view-image {
+                height: 100%;
+                width: 100%;
+            }
+        }
+
+        /* For very small screens */
+        @media (max-width: 480px) {
+            .map-container {
+                width: 90vw;
+                height: 35vh;
+                right: 5vw;
+            }
+
+            .geospatial-container {
+                width: 100vw;
+                left: 0;
+                top: 0;
+                height: 100vh;
+                padding: 0;
+            }
+
+            .query-container {
+                width: 90vw;
+                right: 5vw;
+                top: 60px;
+                height: calc(100vh - 280px);
+                padding: 12px;
+            }
+
+            .query-header {
+                font-size: 12px;
+                margin-bottom: 8px;
+            }
+
+            .query-textarea {
+                font-size: 12px;
+                padding: 8px;
+            }
+
+            .query-button {
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+
+            .street-view-image {
+                width: 100%;
+                height: 100%;
+            }
+        }
+
+        /* Add class to hide sensitive UI elements */
+        .multiplayer-sensitive {
+            transition: opacity 0.3s ease;
+        }
+
+        /* Timer styles */
+        .timer {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            z-index: 40;
+            backdrop-filter: blur(8px);
+        }
+
+        .timer.warning {
+            background: rgba(239, 68, 68, 0.7);
+        }
+
+        /* Add fullscreen map state */
+        .map-container.fullscreen {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            z-index: 1000 !important;
+            margin: 0 !important;
+            border-radius: 0 !important;
+            transform: none !important;
+        }
+
+        /* Add a new medium-sized map state (60% of screen) */
+        .map-container.medium-view {
+            position: fixed !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            width: 60% !important;
+            height: 60% !important;
+            z-index: 1000 !important;
+            margin: 0 !important;
+        }
+
+        /* Fullscreen toggle button */
+        .fullscreen-toggle {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1001;
+            background: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            display: none;
+        }
+
+        .map-container.fullscreen .fullscreen-toggle {
+            display: block;
+        }
+
+        /* Adjust results card position for fullscreen mode */
+        .map-container.fullscreen #results {
+            top: 20px;
+            left: 20px;
+            z-index: 1002;
+        }
+
+        /* Ensure other controls are hidden or brought to front in fullscreen */
+        .map-container.fullscreen .controls-bar {
+            z-index: 1002;
+        }
+
+        /* Fullscreen control buttons */
+        .fullscreen-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1002;
+            display: none;
+        }
+
+        .map-container.fullscreen .fullscreen-controls {
+            display: flex;
+            gap: 10px;
+        }
+    </style>
+</head>
+
+<body class="bg-black min-h-screen flex flex-col">
+    <!-- Game Mode Selection Modal -->
+    <div id="lobby-screen" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-xl p-8 max-w-lg w-full">
+            <h2 class="text-2xl font-bold text-center text-primary mb-6">Choose Game Mode</h2>
+
+            <div id="game-mode-selection" class="flex flex-col items-center space-y-4 mb-6">
+                <button id="single-player-btn"
+                    class="w-64 py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-lg transition transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-50">
+                    1v1 vs DeepSeeker
+                </button>
+                <div class="text-gray-500">- or -</div>
+                <button id="multiplayer-btn"
+                    class="w-64 py-3 bg-secondary hover:bg-secondary-dark text-white font-bold rounded-lg transition transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-opacity-50">
+                    Multiplayer
+                </button>
+            </div>
+
+            <div id="lobby-controls" class="space-y-4 hidden">
+                <div class="space-y-2">
+                    <input type="text" id="player-name" placeholder="Enter your name"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+                    <button id="create-lobby-btn"
+                        class="w-full py-2 bg-primary hover:bg-primary-dark text-white font-bold rounded-lg transition">Create
+                        Lobby</button>
+                </div>
+                <div class="text-center text-gray-500">- or -</div>
+
+                <!-- Add Available Lobbies Section -->
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-semibold">Available Lobbies</h3>
+                        <button id="refresh-lobbies" class="text-primary hover:text-primary-dark">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                    <div id="available-lobbies" class="border rounded-lg max-h-48 overflow-y-auto p-2">
+                        <div class="text-gray-500 text-center py-2">Loading lobbies...</div>
+                    </div>
+                </div>
+
+                <div class="text-center text-gray-500">- or -</div>
+                <div class="space-y-2">
+                    <input type="text" id="lobby-id" placeholder="Enter lobby code"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+                    <button id="join-lobby-btn"
+                        class="w-full py-2 bg-primary hover:bg-primary-dark text-white font-bold rounded-lg transition">Join
+                        Lobby</button>
+                </div>
+            </div>
+
+            <div id="lobby-info" class="hidden">
+                <h3 class="text-xl font-semibold mb-2">Lobby Code: <span id="lobby-code"
+                        class="text-primary font-mono"></span></h3>
+                <div class="border rounded-lg p-2 mb-4 max-h-48 overflow-y-auto">
+                    <h4 class="font-semibold text-gray-700 mb-2">Players:</h4>
+                    <div id="player-list" class="space-y-1"></div>
+                </div>
+                <button id="start-game-btn"
+                    class="w-full py-3 bg-success hover:bg-success-dark text-white font-bold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-success focus:ring-opacity-50">Start
+                    Game</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add timer element after the lobby screen div -->
+    <div id="timer" class="timer hidden">2:00</div>
+
+    <!-- Main Game Area - Full Screen Image -->
+    <div class="relative flex-1 w-full">
+        <!-- Loading Indicator -->
+        <div id="loader-container"
+            class="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-70 z-30">
+            <div class="w-16 h-16 border-4 border-primary border-t-transparent rounded-full spin"></div>
+            <div class="text-white mt-4 font-semibold">Loading new location...</div>
+        </div>
+
+        <!-- Street View Image - Responsive -->
+        <div class="street-view-container">
+            <img id="streetview" class="street-view-image hidden" alt="Street View Image">
+        </div>
+
+        <!-- Top Navigation Bar -->
+        <div class="absolute top-0 left-0 right-0 py-3 px-4 flex justify-between items-center z-40">
+            <!-- Logo and Round Info -->
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center">
+                    <i class="fas fa-map-marker-alt text-yellow-400 text-4xl mr-3"></i>
+                    <h1 class="text-white text-2xl font-bold hidden sm:block">DeepSeeker</h1>
+                </div>
+
+                <!-- Round Indicator Dots - Removed as requested -->
+            </div>
+
+            <!-- Score Display - Removed as requested -->
+        </div>
+
+        <!-- Geospatial Heatmap - Left Side -->
+        <div id="geospatial-container" class="geospatial-container">
+            <div id="geospatial-map" class="geospatial-map">
+                <div class="geospatial-loading">Loading Earth Engine...</div>
+            </div>
+            <div class="geospatial-controls">
+                <button id="geospatial-refresh" class="geospatial-button">Refresh</button>
+                <button id="geospatial-toggle" class="geospatial-button">Toggle View</button>
+            </div>
+        </div>
+
+        <!-- Query Text Box - Right Side -->
+        <div id="query-container" class="query-container">
+            <div class="query-header">Ask a question about this location:</div>
+            <textarea id="query-textarea" class="query-textarea" placeholder="e.g., What country is this? What landmarks can you see? What's the climate like here?"></textarea>
+            <button id="query-button" class="query-button">Send Query</button>
+            <div id="query-response" class="query-response"></div>
+        </div>
+
+        <!-- Map Container - Bottom Right Corner -->
+        <div id="map-container" class="absolute right-6 bottom-6 w-96 h-64 z-30 map-container">
+            <div id="map" class="w-full h-full"></div>
+
+            <!-- Fullscreen Toggle Button -->
+            <button id="fullscreen-toggle" class="fullscreen-toggle">
+                <i class="fas fa-compress"></i> Exit Fullscreen
+            </button>
+
+            <!-- Fullscreen Controls -->
+            <div class="fullscreen-controls">
+                <button id="fullscreen-next-btn"
+                    class="bg-secondary hover:bg-secondary-dark text-white font-bold py-2 px-6 rounded-lg transition transform hover:-translate-y-1">
+                    Next Location
+                </button>
+            </div>
+
+            <!-- Guess Button -->
+            <button id="guess-btn"
+                class="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-success hover:bg-success-dark text-white font-bold py-2 px-6 rounded-lg shadow-lg z-20 disabled:bg-gray-400 disabled:cursor-not-allowed transition">
+                MAKE GUESS
+            </button>
+        </div>
+
+        <!-- Compass -->
+        <div
+            class="absolute top-20 right-6 bg-white bg-opacity-80 w-10 h-10 rounded-full flex items-center justify-center shadow-md z-35">
+            <i class="fas fa-compass text-primary text-xl"></i>
+        </div>
+
+        <!-- Bottom Controls Bar -->
+        <div class="absolute bottom-0 left-0 right-0 controls-bar py-3 px-6 flex justify-center space-x-6 z-40">
+            <button id="submit-guess"
+                class="bg-primary hover:bg-primary-dark text-white font-bold py-2 px-6 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed transition transform hover:-translate-y-1"
+                disabled>
+                Submit Guess
+            </button>
+            <button id="next-image"
+                class="bg-secondary hover:bg-secondary-dark text-white font-bold py-2 px-6 rounded-lg transition transform hover:-translate-y-1">
+                Next Location
+            </button>
+        </div>
+    </div>
+
+    <!-- Results Card -->
+    <div id="results"
+        class="absolute top-20 left-4 bg-white rounded-xl shadow-card p-4 max-w-sm z-40 hidden multiplayer-sensitive">
+        <h2 class="text-xl font-bold text-primary border-b pb-2 mb-3">Round Results</h2>
+        <div id="user-distance" class="text-gray-700 py-1"></div>
+        <div id="model-distance" class="text-gray-700 py-1"></div>
+
+        <div class="flex justify-between mt-3 pt-2 border-t">
+            <div class="flex items-center">
+                <span class="w-3 h-3 bg-blue-500 rounded-full mr-1"></span>
+                <span class="text-sm">Your guess</span>
+            </div>
+            <div class="flex items-center">
+                <span class="w-3 h-3 bg-green-500 rounded-full mr-1"></span>
+                <span class="text-sm">Actual</span>
+            </div>
+            <div class="flex items-center">
+                <span class="w-3 h-3 bg-violet-500 rounded-full mr-1"></span>
+                <span class="text-sm">AI</span>
+            </div>
+        </div>
+
+        <div id="winner" class="text-center font-bold text-lg mt-3 pt-2"></div>
+    </div>
+
+    <!-- Game Summary Modal -->
+    <div id="game-summary" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl shadow-xl p-8 max-w-2xl w-full">
+            <h2 class="text-2xl font-bold text-center text-primary mb-6">Game Summary</h2>
+
+            <div class="grid grid-cols-2 gap-6 mb-6">
+                <div class="bg-blue-50 border-2 border-blue-500 rounded-lg p-4 text-center">
+                    <h3 class="text-lg font-semibold text-blue-700">Your Score</h3>
+                    <div id="final-user-score" class="text-4xl font-bold text-blue-600 my-2">0</div>
+                </div>
+                <div class="bg-purple-50 border-2 border-violet-500 rounded-lg p-4 text-center">
+                    <h3 class="text-lg font-semibold text-violet-700">DeepSeeker Score</h3>
+                    <div id="final-ai-score" class="text-4xl font-bold text-violet-600 my-2">0</div>
+                </div>
+            </div>
+
+            <h3 id="final-winner" class="text-xl font-bold text-center mb-4">Winner: You!</h3>
+
+            <div class="border rounded-lg mb-6 overflow-hidden">
+                <div class="bg-gray-100 px-4 py-2 font-semibold">Rounds Detail:</div>
+                <div id="rounds-history" class="divide-y p-3">
+                    <!-- Round history will be inserted here -->
+                </div>
+            </div>
+
+            <button id="new-game-btn"
+                class="w-full py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-lg transition transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary">
+                Start New Game
+            </button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        // Google Earth Engine API Key
+        const EARTH_ENGINE_API_KEY = 'AIzaSyByEBj0Z4wzn-xgA0xKQFYf0qrV2nmWCTE';
+        
+        let map, marker, modelMarker, actualMarker;
+        let userGuessCoords = null;
+        let modelPrediction = null;
+        let currentImagePath = null;
+        let fullImagePath = null;
+        let nextImageDelay = 10000; // 10 seconds delay before loading next image
+        let countdownTimer;
+        let userScore = 0;
+        let aiScore = 0;
+        let canMakeGuess = false; // Flag to track if user can make a guess
+        let currentRound = 1;
+        let maxRounds = 5;
+        let roundsHistory = []; // Store results of each round
+        let mapExpanded = true; // Track if map is expanded or collapsed
+
+        // Geospatial variables
+        let earthEngineMap = null;
+        let geospatialInitialized = false;
+        let currentHeatmapPoint = null;
+
+        let playerId = Math.random().toString(36).substr(2, 9);
+        let lobbyId = null;
+        let playerColors = {};
+        const markerColors = ['blue', 'gold', 'red', 'green', 'orange', 'yellow', 'violet', 'grey', 'black'];
+        let nextColorIndex = 0;
+
+        // Move socket initialization to the top level
+        const socket = io();
+
+        // Add a new flag to track if a guess has been submitted for the current round
+        let guessSubmitted = false;
+
+        // Add a new flag to track if all players have guessed in the current round
+        let allPlayersGuessed = false;
+
+        // Add a team score variable to track the sum of best scores
+        let teamScore = 0;
+
+        // Initialize the score variables with placeholders
+        let pendingScoreDisplay = "--";
+
+        // Add a flag to track if the current player is the host
+        let isHost = false;
+
+        // Add timer variables
+        let timerInterval;
+        let timeRemaining = 120; // 120 seconds
+
+        // Add a flag to track if map is in fullscreen mode
+        let mapFullscreen = false;
+
+        // Helper function to update round indicator dots
+        function updateRoundIndicator() {
+            for (let i = 1; i <= maxRounds; i++) {
+                const dot = document.getElementById(`round-dot-${i}`);
+                if (i === currentRound) {
+                    dot.classList.add('active');
+                } else {
+                    dot.classList.remove('active');
+                }
+            }
+        }
+
+        // Function to toggle map expansion/collapse
+        function toggleMap() {
+            const mapContainer = document.getElementById('map-container');
+            const toggleBtn = document.getElementById('map-toggle');
+
+            // Don't collapse if in enlarged mode
+            if (mapContainer.classList.contains('enlarged')) {
+                return;
+            }
+
+            if (mapExpanded) {
+                mapContainer.classList.add('collapsed');
+                toggleBtn.classList.add('active');
+            } else {
+                mapContainer.classList.remove('collapsed');
+                toggleBtn.classList.remove('active');
+            }
+
+            mapExpanded = !mapExpanded;
+
+            // Need to invalidate the map size after toggling
+            setTimeout(() => {
+                map.invalidateSize();
+            }, 300);
+        }
+
+        // Define the missing loadNewImage function
+        function loadNewImage() {
+            // Show loading indicator
+            document.getElementById('loader-container').style.display = 'flex';
+            document.getElementById('streetview').style.display = 'none';
+
+            // Reset guess-related state
+            canMakeGuess = false;
+            guessSubmitted = false;
+            userGuessCoords = null;
+            document.getElementById('submit-guess').disabled = true;
+            document.getElementById('guess-btn').textContent = "MAKE GUESS";
+            document.getElementById('guess-btn').disabled = false; // Make sure the guess button is enabled for the new round
+            document.getElementById('results').style.display = 'none';
+
+            // Remove ALL markers from the map
+            map.eachLayer(layer => {
+                if (layer instanceof L.Marker || layer._playerMarker) {
+                    map.removeLayer(layer);
+                }
+            });
+
+            // Reset marker variables
+            marker = null;
+            modelMarker = null;
+            actualMarker = null;
+
+            // Clear all player markers from the map
+            map.eachLayer(layer => {
+                if (layer._playerMarker || layer === marker || layer === modelMarker || layer === actualMarker) {
+                    map.removeLayer(layer);
+                }
+            });
+
+            // If in multiplayer mode, include lobby ID in the request
+            const queryParams = lobbyId ? `?lobby_id=${lobbyId}` : '';
+
+            // Fetch a new image from the server
+            fetch(`/get_image${queryParams}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Store the image path and model prediction
+                    currentImagePath = data.image_path;
+                    fullImagePath = data.full_image_path;
+                    modelPrediction = data.model_prediction;
+
+                    // Load the image
+                    const img = document.getElementById('streetview');
+                    img.src = currentImagePath;
+                    img.onload = () => {
+                        // Hide loader and show image once loaded
+                        document.getElementById('loader-container').style.display = 'none';
+                        img.style.display = 'block';
+
+                        // Adjust image size based on window dimensions
+                        adjustImageSize();
+
+                        canMakeGuess = true;
+
+                        // Start the timer when the image is loaded
+                        startTimer();
+                    };
+                })
+                .catch(error => {
+                    console.error('Error loading image:', error);
+                    document.getElementById('loader-container').style.display = 'none';
+                    // Removed error notification as requested
+                });
+
+            // Reset the allPlayersGuessed flag when loading a new image
+            allPlayersGuessed = false;
+
+            // Update UI to hide sensitive elements
+            updateSensitiveUIElements();
+
+            // Reset saved locations
+            savedActualLocation = null;
+            savedModelPrediction = null;
+
+            // Remove enlarged class from map container
+            document.getElementById('map-container').classList.remove('enlarged');
+
+            // Clear query response for new image
+            clearQueryResponse();
+
+            // Refresh geospatial heatmap for new image
+            if (geospatialInitialized) {
+                refreshGeospatialMap();
+            }
+        }
+
+        // Enhanced initializeSocket function with all necessary socket events for multiplayer
+        function initializeSocket() {
+            // Connection event
+            socket.on('connected', function (data) {
+                console.log('Connected to server:', data);
+            });
+
+            // Lobby creation events
+            socket.on('lobby_created', function (data) {
+                console.log('Lobby created:', data);
+                lobbyId = data.lobby_id;
+                isHost = true; // Set as host when creating a lobby
+
+                // Update UI to show lobby info
+                document.getElementById('lobby-controls').style.display = 'none';
+                document.getElementById('lobby-info').style.display = 'block';
+                document.getElementById('lobby-code').textContent = data.lobby_id;
+
+                // Add current player to player list
+                updatePlayerList({
+                    players: {
+                        [playerId]: {
+                            id: playerId,
+                            name: document.getElementById('player-name').value || 'You',
+                            is_host: true
+                        }
+                    }
+                });
+
+                // Update host-specific UI
+                updateHostUI();
+            });
+
+            // Handle joining lobbies
+            socket.on('join_success', function (data) {
+                console.log('Successfully joined lobby:', data);
+                lobbyId = data.lobby_id;
+                isHost = false; // Not host when joining someone else's lobby
+
+                // Update UI
+                document.getElementById('lobby-controls').style.display = 'none';
+                document.getElementById('lobby-info').style.display = 'block';
+                document.getElementById('lobby-code').textContent = data.lobby_id;
+
+                // Update host-specific UI
+                updateHostUI();
+            });
+
+            // Update player list when lobby state changes
+            socket.on('lobby_state', function (data) {
+                console.log('Lobby state updated:', data);
+                updatePlayerList(data);
+
+                // Check if we are the host in the updated player list
+                if (data.players && data.players[playerId]) {
+                    isHost = data.players[playerId].is_host === true;
+                    updateHostUI();
+                }
+            });
+
+            // Handle errors
+            socket.on('error', function (data) {
+                showNotification(data.message || 'An error occurred', 5000);
+            });
+
+            // Handle new round events
+            socket.on('start_new_round', (data) => {
+                currentRound = data.round;
+                updateRoundIndicator();
+
+                if (currentRound === maxRounds) {
+                    document.getElementById('next-image').textContent = "Show Final Results";
+                } else {
+                    document.getElementById('next-image').textContent = "Next Location";
+                }
+                socket.emit('request_new_image', { lobby_id: lobbyId });
+            });
+
+            // Handle image loading events
+            socket.on('load_new_image', function () {
+                loadNewImage();
+            });
+
+            // Handle player markers updates
+            socket.on('player_markers', function (data) {
+                if (data.lobby_id === lobbyId) {
+                    updateMultiplayerMarkers(data.players);
+                }
+            });
+
+            // Handle when all players have guessed
+            socket.on('all_guessed', function (data) {
+                if (data.lobby_id === lobbyId) {
+                    // Set the flag that all players have guessed
+                    allPlayersGuessed = true;
+
+                    // Enable next round button ONLY for the host
+                    if (isHost) {
+                        document.getElementById('next-image').disabled = false;
+                        document.getElementById('next-image').classList.remove('opacity-50');
+                    }
+
+                    // Update team score with the best scores
+                    if (data.team_score !== undefined) {
+                        teamScore = data.team_score;
+                        // Update user score element with team score
+                        document.getElementById('user-score').textContent = teamScore;
+                    }
+
+                    // Update AI score
+                    if (data.ai_total_score !== undefined) {
+                        aiScore = data.ai_total_score;
+                        document.getElementById('ai-score').textContent = aiScore;
+                    }
+
+                    // Now show the sensitive UI elements
+                    updateSensitiveUIElements();
+
+                    // Add the result markers
+                    addResultMarkers();
+
+                    // Show notification that all players have guessed
+                    showNotification("All players have made their guesses!");
+
+                    // Make map fullscreen after all players have guessed
+                    setTimeout(() => {
+                        toggleMapFullscreen(true);
+                    }, 500);
+                }
+            });
+
+            // Add handler for player disconnect events
+            socket.on('player_left', function (data) {
+                if (data.lobby_id === lobbyId) {
+                    // Show notification that a player left
+                    showNotification(`${data.player_name} has left the game.`);
+
+                    // Update the lobby state with the new player list
+                    if (data.lobby_state) {
+                        updatePlayerList(data.lobby_state);
+                    }
+
+                    // If a host left and we're now the host, update UI
+                    if (data.was_host && data.lobby_state &&
+                        data.lobby_state.players &&
+                        data.lobby_state.players[playerId] &&
+                        data.lobby_state.players[playerId].is_host) {
+                        isHost = true;
+                        showNotification("You are now the host!");
+                        updateHostUI();
+                    }
+
+                    // If all remaining players have guessed, this will be handled by the all_guessed event
+                }
+            });
+
+            // Update the all_guessed handler to account for player departures
+            socket.on('all_guessed', function (data) {
+                if (data.lobby_id === lobbyId) {
+                    // Set the flag that all players have guessed
+                    allPlayersGuessed = true;
+
+                    // Enable next round button for the host
+                    if (isHost) {
+                        document.getElementById('next-image').disabled = false;
+                        document.getElementById('next-image').classList.remove('opacity-50');
+                    }
+
+                    // Update team score with the best scores
+                    if (data.team_score !== undefined) {
+                        teamScore = data.team_score;
+                        // Update user score element with team score
+                        document.getElementById('user-score').textContent = teamScore;
+                    }
+
+                    // Update AI score
+                    if (data.ai_total_score !== undefined) {
+                        aiScore = data.ai_total_score;
+                        document.getElementById('ai-score').textContent = aiScore;
+                    }
+
+                    // Now show the sensitive UI elements
+                    updateSensitiveUIElements();
+
+                    // Add the result markers
+                    addResultMarkers();
+
+                    // Show appropriate notification
+                    if (data.player_left) {
+                        showNotification("All remaining players have made their guesses.");
+                    } else {
+                        showNotification("All players have made their guesses!");
+                    }
+
+                    // Make map fullscreen after all players have guessed
+                    setTimeout(() => {
+                        toggleMapFullscreen(true);
+                    }, 500);
+                }
+            });
+
+            // Add handler for game restart events
+            socket.on('game_restarted', (data) => {
+                if (data.lobby_id === lobbyId) {
+                    // Reset UI elements
+                    document.getElementById('game-summary').style.display = 'none';
+                    document.getElementById('results').style.display = 'none';
+
+                    // Reset round counter in UI
+                    currentRound = 1;
+                    updateRoundIndicator();
+                    document.getElementById('next-image').textContent = "Next Location";
+
+                    // Reset history
+                    roundsHistory = [];
+
+                    showNotification("Game has been restarted!");
+                }
+            });
+
+            // Add handler for game start event
+            socket.on('game_started', function (data) {
+                if (data.lobby_id === lobbyId) {
+                    // Hide lobby screen for all players
+                    document.getElementById('lobby-screen').style.display = 'none';
+
+                    // Reset scores for a new game
+                    userScore = 0;
+                    aiScore = 0;
+                    currentRound = 1;
+                    roundsHistory = [];
+
+                    // Update UI
+                    document.getElementById('user-score').textContent = '0';
+                    document.getElementById('ai-score').textContent = '0';
+                    updateRoundIndicator();
+
+                    // Start loading first image
+                    loadNewImage();
+                }
+
+                // Reset the all players guessed flag
+                allPlayersGuessed = false;
+
+                // Update UI to hide sensitive elements
+                updateSensitiveUIElements();
+
+                // Reset scores to placeholders in the UI for multiplayer
+                if (lobbyId) {
+                    document.getElementById('user-score').textContent = pendingScoreDisplay;
+                    document.getElementById('ai-score').textContent = pendingScoreDisplay;
+                }
+            });
+
+            // Add new handler for final round completion
+            socket.on('final_round_completed', function (data) {
+                if (data.lobby_id === lobbyId) {
+                    if (isHost) {
+                        // Enable the "Show Final Results" button for the host
+                        document.getElementById('next-image').disabled = false;
+                        document.getElementById('next-image').classList.remove('opacity-50');
+                        document.getElementById('next-image').textContent = "Show Final Results";
+
+                        // Show notification to host that they can show final results
+                        showNotification("All players have completed the final round. You can now show the results.");
+                    } else {
+                        // Show notification to non-host players
+                        showNotification("Final round completed. Waiting for host to show results...");
+                    }
+                }
+            });
+
+            // Enhance the player_left handler to better handle disconnections
+            socket.on('player_left', function (data) {
+                if (data.lobby_id === lobbyId) {
+                    // Show notification that a player left
+                    showNotification(`${data.player_name} has left the game.`);
+
+                    // Update the lobby state with the new player list
+                    if (data.lobby_state) {
+                        updatePlayerList(data.lobby_state);
+                    }
+
+                    // If a host left and we're now the host, update UI
+                    if (data.was_host && data.lobby_state &&
+                        data.lobby_state.players &&
+                        data.lobby_state.players[playerId] &&
+                        data.lobby_state.players[playerId].is_host) {
+                        isHost = true;
+                        showNotification("You are now the host!");
+                        updateHostUI();
+
+                        // Enable next button if appropriate (final round or all guessed)
+                        if (allPlayersGuessed || currentRound >= maxRounds) {
+                            document.getElementById('next-image').disabled = false;
+                            document.getElementById('next-image').classList.remove('opacity-50');
+                        }
+                    }
+
+                    // If we're the host and the player who left hadn't guessed yet,
+                    // and now all remaining players have guessed, enable next round button
+                    if (isHost && !data.had_guessed && allPlayersGuessed) {
+                        document.getElementById('next-image').disabled = false;
+                        document.getElementById('next-image').classList.remove('opacity-50');
+                        showNotification("All remaining players have made their guesses. You can now proceed.");
+                    }
+                }
+            });
+
+            // Enhance the all_guessed handler to better handle when triggered by player departure
+            socket.on('all_guessed', function (data) {
+                if (data.lobby_id === lobbyId) {
+                    // Set the flag that all players have guessed
+                    allPlayersGuessed = true;
+
+                    // Enable next round button for the host
+                    if (isHost) {
+                        document.getElementById('next-image').disabled = false;
+                        document.getElementById('next-image').classList.remove('opacity-50');
+                    }
+
+                    // Update team score with the best scores
+                    if (data.team_score !== undefined) {
+                        teamScore = data.team_score;
+                        // Update user score element with team score
+                        document.getElementById('user-score').textContent = teamScore;
+                    }
+
+                    // Update AI score
+                    if (data.ai_total_score !== undefined) {
+                        aiScore = data.ai_total_score;
+                        document.getElementById('ai-score').textContent = aiScore;
+                    }
+
+                    // Now show the sensitive UI elements
+                    updateSensitiveUIElements();
+
+                    // Add the result markers
+                    addResultMarkers();
+
+                    // Show appropriate notification
+                    if (data.player_left) {
+                        showNotification("All remaining players have made their guesses.");
+                    } else {
+                        showNotification("All players have made their guesses!");
+                    }
+
+                    // Make map fullscreen after all players have guessed
+                    setTimeout(() => {
+                        toggleMapFullscreen(true);
+                    }, 500);
+                }
+            });
+
+            // Add handler for lobbies list
+            socket.on('lobbies_list', function (data) {
+                const lobbiesContainer = document.getElementById('available-lobbies');
+                lobbiesContainer.innerHTML = '';
+
+                if (!data.lobbies || Object.keys(data.lobbies).length === 0) {
+                    lobbiesContainer.innerHTML = '<div class="text-gray-500 text-center py-2">No active lobbies available</div>';
+                    return;
+                }
+
+                // Create list of lobbies
+                Object.values(data.lobbies).forEach(lobby => {
+                    const lobbyEl = document.createElement('div');
+                    lobbyEl.className = 'flex justify-between items-center p-2 hover:bg-gray-100 rounded cursor-pointer';
+                    lobbyEl.innerHTML = `
+                        <div>
+                            <span class="font-semibold">${lobby.id}</span>
+                            <span class="text-sm text-gray-600 ml-2">${lobby.player_count} player${lobby.player_count !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div>
+                            ${lobby.game_in_progress ?
+                            `<span class="text-xs bg-yellow-500 text-white px-1 py-0.5 rounded">Round ${lobby.current_round}/${lobby.max_rounds}</span>` :
+                            '<span class="text-xs bg-green-500 text-white px-1 py-0.5 rounded">Waiting</span>'}
+                        </div>
+                    `;
+
+                    // Add click handler to join this lobby
+                    lobbyEl.addEventListener('click', function () {
+                        document.getElementById('lobby-id').value = lobby.id;
+                    });
+
+                    lobbiesContainer.appendChild(lobbyEl);
+                });
+            });
+        }
+
+        // Function to update UI elements based on host status
+        function updateHostUI() {
+            // Start game button is only visible to the host
+            const startGameBtn = document.getElementById('start-game-btn');
+            if (startGameBtn) {
+                startGameBtn.style.display = isHost ? 'block' : 'none';
+            }
+
+            // Next image button is only enabled for the host in multiplayer mode
+            const nextImageBtn = document.getElementById('next-image');
+            if (nextImageBtn && lobbyId) {
+                // In multiplayer, the button should only be interactive for the host
+                if (!isHost) {
+                    nextImageBtn.disabled = true;
+                    nextImageBtn.classList.add('opacity-50');
+                    nextImageBtn.title = "Only the host can proceed to the next round";
+                } else if (allPlayersGuessed) {
+                    // Even for the host, the button should only be enabled when all players have guessed
+                    nextImageBtn.disabled = false;
+                    nextImageBtn.classList.remove('opacity-50');
+                    nextImageBtn.title = "Proceed to next location";
+                }
+            }
+        }
+
+        // Function to update the player list in the UI
+        function updatePlayerList(data) {
+            if (!data || !data.players) return;
+
+            const playerListEl = document.getElementById('player-list');
+            playerListEl.innerHTML = '';
+
+            // Check if the lobby is empty (this shouldn't happen but just in case)
+            if (Object.keys(data.players).length === 0) {
+                playerListEl.innerHTML = '<div class="text-gray-500">No players in lobby</div>';
+                return;
+            }
+
+            // Assign colors to players if they don't have one
+            Object.keys(data.players).forEach(pid => {
+                if (!playerColors[pid]) {
+                    playerColors[pid] = markerColors[nextColorIndex % markerColors.length];
+                    nextColorIndex++;
+                }
+            });
+
+            // Add players to list
+            Object.values(data.players).forEach(player => {
+                const playerColor = playerColors[player.id] || 'gray';
+                const playerEl = document.createElement('div');
+                playerEl.className = 'flex items-center justify-between';
+
+                // Add host badge for host player
+                const hostBadge = player.is_host ?
+                    '<span class="bg-yellow-500 text-xs text-white px-1 rounded ml-1">Host</span>' : '';
+
+                playerEl.innerHTML = `
+                <div class="flex items-center">
+                    <span class="w-3 h-3 rounded-full mr-2" style="background-color: ${playerColor}"></span>
+                    <span>${player.id === playerId ? player.name + ' (You)' : player.name} ${hostBadge}</span>
+                </div>
+                ${player.has_guessed ? '<span class="text-success"><i class="fas fa-check"></i></span>' : ''}
+            `;
+                playerListEl.appendChild(playerEl);
+            });
+
+            // Show the start game button for the host
+            if (isHost) {
+                document.getElementById('start-game-btn').style.display = 'block';
+
+                // Remove any "waiting for host" message that might be present
+                const waitingMsg = document.querySelector('#lobby-info .text-center.mt-4.text-gray-600');
+                if (waitingMsg) waitingMsg.remove();
+            } else {
+                document.getElementById('start-game-btn').style.display = 'none';
+
+                // Add waiting message if it doesn't exist
+                if (!document.querySelector('#lobby-info .text-center.mt-4.text-gray-600')) {
+                    document.getElementById('lobby-info').insertAdjacentHTML('beforeend',
+                        '<div class="text-center mt-4 text-gray-600">Waiting for the host to start the game...</div>');
+                }
+            }
+        }
+
+        // Function to update other players' markers on the map
+        function updateMultiplayerMarkers(players) {
+            // Remove existing player markers except your own
+            map.eachLayer(layer => {
+                if (layer._playerMarker && layer._playerId !== playerId) {
+                    map.removeLayer(layer);
+                }
+            });
+
+            // Add markers for other players who have guessed
+            Object.values(players).forEach(player => {
+                if (player.id !== playerId && player.has_guessed && player.current_guess) {
+                    const playerColor = playerColors[player.id] || 'gray';
+                    const playerLatLng = L.latLng(player.current_guess.lat, player.current_guess.lng);
+
+                    const playerMarker = L.marker(playerLatLng, {
+                        icon: L.divIcon({
+                            className: 'custom-div-icon',
+                            html: `<div style="background-color: ${playerColor}; width: 12px; height: 12px; border-radius: 50%;"></div>`,
+                            iconSize: [12, 12],
+                            iconAnchor: [6, 6]
+                        })
+                    });
+
+                    // Tag the marker with player info
+                    playerMarker._playerMarker = true;
+                    playerMarker._playerId = player.id;
+
+                    // Add tooltip with player name
+                    playerMarker.bindTooltip(player.name);
+
+                    // Add to map
+                    playerMarker.addTo(map);
+                }
+            });
+        }
+
+        // Add a helper function to show notifications
+        function showNotification(message, duration = 3000) {
+            // Create notification element if it doesn't exist
+            let notification = document.getElementById('notification');
+            if (!notification) {
+                notification = document.createElement('div');
+                notification.id = 'notification';
+                notification.className = 'fixed top-4 right-4 bg-black bg-opacity-80 text-white py-2 px-4 rounded-lg shadow-lg z-50 transform transition-opacity duration-300 opacity-0';
+                document.body.appendChild(notification);
+            }
+
+            // Set message and show
+            notification.textContent = message;
+            notification.style.opacity = '1';
+
+            // Hide after duration
+            setTimeout(() => {
+                notification.style.opacity = '0';
+            }, duration);
+        }
+
+        // Add function to add marker on the map
+        function addMarker(latlng) {
+            // Only allow adding markers if a guess hasn't been submitted yet
+            if (guessSubmitted) {
+                showNotification("You've already submitted a guess for this round.");
+                return;
+            }
+
+            // Remove existing marker if there is one
+            if (marker) map.removeLayer(marker);
+
+            // Create new marker
+            marker = L.marker(latlng).addTo(map);
+            userGuessCoords = latlng;
+
+            // Enable the guess buttons
+            document.getElementById('submit-guess').disabled = false;
+            document.getElementById('guess-btn').textContent = "SUBMIT GUESS";
+        }
+
+        // Add function to adjust image size based on viewport
+        function adjustImageSize() {
+            const img = document.getElementById('streetview');
+            const container = document.querySelector('.street-view-container');
+
+            // Get the original dimensions of the image
+            const imgWidth = img.naturalWidth;
+            const imgHeight = img.naturalHeight;
+
+            // Get available space dimensions
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+
+            // Calculate aspect ratios
+            const imgRatio = imgWidth / imgHeight;
+            const viewportRatio = viewportWidth / viewportHeight;
+
+            if (imgRatio > viewportRatio) {
+                // Image is wider compared to viewport ratio - use full width
+                img.style.width = '100%';
+                img.style.height = 'auto';
+
+                // Center vertically if needed
+                const newHeight = (viewportWidth / imgWidth) * imgHeight;
+                if (newHeight < viewportHeight) {
+                    container.style.display = 'flex';
+                    container.style.alignItems = 'center';
+                }
+            } else {
+                // Image is taller compared to viewport ratio - use full height
+                img.style.height = '100vh';
+                img.style.width = 'auto';
+
+                // Center horizontally
+                container.style.display = 'flex';
+                container.style.justifyContent = 'center';
+            }
+        }
+
+        // Add resize event listener to adjust image when window is resized
+        window.addEventListener('resize', function () {
+            if (document.getElementById('streetview').style.display !== 'none') {
+                adjustImageSize();
+            }
+
+            // Also need to invalidate the map size when window resizes
+            if (map) {
+                map.invalidateSize();
+            }
+        });
+
+        // Initialize Google Earth Engine
+        function initializeEarthEngine() {
+            try {
+                // Initialize Earth Engine with proper configuration
+                ee.initialize({
+                    apiKey: EARTH_ENGINE_API_KEY,
+                    authToken: null
+                }, function() {
+                    console.log('Earth Engine initialized successfully');
+                    geospatialInitialized = true;
+                    initializeGeospatialMap();
+                }, function(error) {
+                    console.error('Earth Engine initialization failed:', error);
+                    document.querySelector('.geospatial-loading').textContent = 'Earth Engine failed to load';
+                    // Fallback to a simple map
+                    initializeFallbackMap();
+                });
+
+            } catch (error) {
+                console.error('Failed to initialize Earth Engine:', error);
+                document.querySelector('.geospatial-loading').textContent = 'Failed to load Earth Engine';
+                // Fallback to a simple map
+                initializeFallbackMap();
+            }
+        }
+
+        // Fallback map using Leaflet
+        function initializeFallbackMap() {
+            const mapContainer = document.getElementById('geospatial-map');
+            mapContainer.innerHTML = '';
+            
+            // Create a simple Leaflet map as fallback
+            const fallbackMap = L.map(mapContainer, {
+                zoomControl: false,
+                doubleClickZoom: false,
+                worldCopyJump: true,
+                maxBounds: [[-90, -180], [90, 180]],
+                maxBoundsViscosity: 1.0,
+                minZoom: 2
+            }).setView([0, 0], 2);
+
+            // Add satellite tile layer for better appearance
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                noWrap: true,
+                attribution: '&copy; <a href="https://www.esri.com/">Esri</a>'
+            }).addTo(fallbackMap);
+
+            // Zoom control removed as requested
+
+            // Add click handler
+            fallbackMap.on('click', function(e) {
+                generateFallbackHeatmap(e.latlng);
+            });
+
+            // Store reference
+            earthEngineMap = fallbackMap;
+            geospatialInitialized = true;
+
+            // Hide loading message
+            document.querySelector('.geospatial-loading').style.display = 'none';
+        }
+
+        // Generate fallback heatmap
+        function generateFallbackHeatmap(latlng) {
+            if (!geospatialInitialized) return;
+
+            currentHeatmapPoint = latlng;
+            
+            // Show loading
+            document.querySelector('.geospatial-loading').style.display = 'block';
+            document.querySelector('.geospatial-loading').textContent = 'Generating heatmap...';
+
+            // Create a more sophisticated heatmap effect
+            const heatmapLayer = L.layerGroup();
+            
+            // Generate points with geographic clustering (more realistic)
+            const numPoints = 100;
+            const baseLat = latlng.lat;
+            const baseLng = latlng.lng;
+            
+            for (let i = 0; i < numPoints; i++) {
+                // Create clusters around the clicked point
+                const clusterRadius = 15; // degrees
+                const angle = (i / numPoints) * 2 * Math.PI;
+                const distance = Math.random() * clusterRadius;
+                
+                const randomLat = baseLat + Math.cos(angle) * distance * Math.random();
+                const randomLng = baseLng + Math.sin(angle) * distance * Math.random();
+                
+                // Calculate intensity based on distance from center
+                const distanceFromCenter = Math.sqrt(
+                    Math.pow(randomLat - baseLat, 2) + Math.pow(randomLng - baseLng, 2)
+                );
+                const intensity = Math.max(0, 1 - (distanceFromCenter / clusterRadius));
+                
+                // Add some randomness to make it more realistic
+                const finalIntensity = intensity * (0.5 + Math.random() * 0.5);
+                
+                const circle = L.circle([randomLat, randomLng], {
+                    radius: 30000 + (finalIntensity * 100000),
+                    fillColor: finalIntensity > 0.8 ? '#FCFDBF' : 
+                              finalIntensity > 0.6 ? '#FDAE78' : 
+                              finalIntensity > 0.4 ? '#EE605E' : 
+                              finalIntensity > 0.2 ? '#B63679' : '#711F81',
+                    color: 'transparent',
+                    fillOpacity: 0.4 + (finalIntensity * 0.4)
+                });
+                
+                heatmapLayer.addLayer(circle);
+            }
+
+            // Add to map
+            earthEngineMap.addLayer(heatmapLayer);
+
+            // Hide loading
+            document.querySelector('.geospatial-loading').style.display = 'none';
+        }
+
+        // Initialize the map
+        document.addEventListener('DOMContentLoaded', function () {
+            // Hide the lobby screen and start directly in single player mode
+            document.getElementById('lobby-screen').style.display = 'none';
+            
+            // Round indicator removed as requested
+
+            // Initialize Earth Engine (with fallback)
+            setTimeout(() => {
+                if (typeof ee !== 'undefined' && ee.initialize) {
+                    console.log('Earth Engine library found, initializing...');
+                    initializeEarthEngine();
+                } else {
+                    console.log('Earth Engine not available, using fallback map');
+                    initializeFallbackMap();
+                }
+            }, 2000);
+
+            map = L.map('map', {
+                zoomControl: false,
+                doubleClickZoom: false,
+                // Add worldCopyJump to handle markers near the edge of the map
+                worldCopyJump: true,
+                // Add maxBounds to constrain the view to Earth's coordinates
+                maxBounds: [
+                    [-90, -180], // Southwest corner
+                    [90, 180]    // Northeast corner
+                ],
+                // Prevent the user from dragging outside the bounds
+                maxBoundsViscosity: 1.0,
+                // Set minimum zoom to prevent zooming out too far
+                minZoom: 2
+            }).setView([0, 0], 2);
+
+            // Zoom control removed as requested
+
+            // Add tile layer (OpenStreetMap)
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                // Add noWrap to prevent tiles from repeating
+                noWrap: true,
+                attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap contributors</a>'
+            }).addTo(map);
+
+            // Add click event to the map
+            map.on('click', function (e) {
+                if (!guessSubmitted) { // Only allow clicks if a guess hasn't been submitted yet
+                    addMarker(e.latlng);
+                }
+            });
+
+            // Map toggle button removed
+
+            // Start the game directly in single player mode
+            startSinglePlayerGame();
+
+            // Set up button event listeners
+            document.getElementById('submit-guess').addEventListener('click', submitGuess);
+            document.getElementById('next-image').addEventListener('click', nextRound);
+            document.getElementById('guess-btn').addEventListener('click', submitGuess);
+            document.getElementById('new-game-btn').addEventListener('click', startNewGame);
+
+            // Add keyboard event listener for space key to submit guess
+            document.addEventListener('keydown', function (event) {
+                // Space key (key code 32) to submit guess
+                if (event.keyCode === 32 || event.key === ' ' || event.key === 'Spacebar') {
+                    // Only allow submission if we have coordinates, haven't submitted yet, and can make a guess
+                    if (userGuessCoords && !guessSubmitted && canMakeGuess) {
+                        // Provide visual feedback that space was pressed
+                        const submitBtn = document.getElementById('submit-guess');
+                        const guessBtn = document.getElementById('guess-btn');
+
+                        // Flash the buttons to provide feedback
+                        submitBtn.classList.add('bg-success');
+                        guessBtn.classList.add('bg-primary');
+
+                        setTimeout(() => {
+                            submitBtn.classList.remove('bg-success');
+                            guessBtn.classList.remove('bg-primary');
+                        }, 200);
+
+                        // Submit the guess
+                        submitGuess();
+
+                        // Prevent default space action (scrolling)
+                        event.preventDefault();
+                    } else if (canMakeGuess && !userGuessCoords) {
+                        // If we can make a guess but haven't placed a marker, show a notification
+                        showNotification("Place a marker on the map before submitting your guess");
+                        event.preventDefault();
+                    }
+                }
+                
+                // Escape key (key code 27) to show game mode selection
+                if (event.keyCode === 27 || event.key === 'Escape') {
+                    document.getElementById('lobby-screen').style.display = 'flex';
+                    document.getElementById('game-mode-selection').style.display = 'flex';
+                    document.getElementById('lobby-controls').style.display = 'none';
+                    document.getElementById('lobby-info').style.display = 'none';
+                }
+            });
+
+            // Initialize socket events
+            initializeSocket();
+
+            // Set up lobby buttons
+            document.getElementById('single-player-btn').addEventListener('click', startSinglePlayerGame);
+            document.getElementById('multiplayer-btn').addEventListener('click', showMultiplayerOptions);
+
+            // Add event listeners for multiplayer buttons
+            document.getElementById('create-lobby-btn').addEventListener('click', createLobby);
+            document.getElementById('join-lobby-btn').addEventListener('click', joinLobby);
+            document.getElementById('start-game-btn').addEventListener('click', startMultiplayerGame);
+
+            // Set up map hover effects
+            const mapContainer = document.getElementById('map-container');
+
+            // Invalidate map size on hover to ensure proper rendering
+            mapContainer.addEventListener('mouseenter', function () {
+                if (mapExpanded) { // Only expand if the map is not collapsed
+                    setTimeout(() => {
+                        map.invalidateSize();
+                    }, 300); // Match the CSS transition duration
+                }
+            });
+
+            // Also invalidate when mouse leaves to ensure proper rendering
+            mapContainer.addEventListener('mouseleave', function () {
+                if (mapExpanded) {
+                    setTimeout(() => {
+                        map.invalidateSize();
+                    }, 300);
+                }
+            });
+
+            // Initialize UI state for sensitive elements
+            updateSensitiveUIElements();
+
+            // Initialize score display
+            updateScoreDisplay();
+
+            // Initialize host UI
+            updateHostUI();
+
+            // Add a leave lobby button to the lobby screen
+            const lobbyInfoDiv = document.getElementById('lobby-info');
+            if (lobbyInfoDiv) {
+                const leaveBtn = document.createElement('button');
+                leaveBtn.id = 'leave-lobby-btn';
+                leaveBtn.className = 'w-full mt-4 py-2 bg-danger hover:bg-danger-dark text-white font-bold rounded-lg transition';
+                leaveBtn.textContent = 'Leave Lobby';
+                leaveBtn.addEventListener('click', leaveLobby);
+                lobbyInfoDiv.appendChild(leaveBtn);
+            }
+
+            // Add event listener for fullscreen toggle button
+            document.getElementById('fullscreen-toggle').addEventListener('click', function () {
+                toggleMapFullscreen(false); // Exit fullscreen when button is clicked
+            });
+
+            // Add event listener for fullscreen next button
+            document.getElementById('fullscreen-next-btn').addEventListener('click', function () {
+                nextRound(); // Use the same nextRound function for consistency
+            });
+
+            // Add refresh lobbies button click handler
+            document.getElementById('refresh-lobbies').addEventListener('click', function () {
+                fetchAvailableLobbies();
+                showNotification("Refreshing lobby list...");
+            });
+
+            // Add double-click handler to join a lobby directly
+            document.getElementById('available-lobbies').addEventListener('dblclick', function (event) {
+                // Find the closest lobby element
+                const lobbyEl = event.target.closest('.cursor-pointer');
+                if (lobbyEl) {
+                    const lobbyId = lobbyEl.querySelector('.font-semibold').textContent;
+                    document.getElementById('lobby-id').value = lobbyId;
+
+                    // Check if player name is provided
+                    if (document.getElementById('player-name').value.trim()) {
+                        joinLobby();
+                    } else {
+                        showNotification("Please enter your name first");
+                        document.getElementById('player-name').focus();
+                    }
+                }
+            });
+
+            // Add geospatial functionality
+            document.getElementById('geospatial-refresh').addEventListener('click', refreshGeospatialMap);
+            document.getElementById('geospatial-toggle').addEventListener('click', toggleGeospatialView);
+
+            // Add query functionality
+            document.getElementById('query-button').addEventListener('click', submitQuery);
+            document.getElementById('query-textarea').addEventListener('keydown', function(event) {
+                if (event.key === 'Enter' && event.ctrlKey) {
+                    submitQuery();
+                }
+            });
+        });
+
+        // Add functions to support the UI flow
+        function startSinglePlayerGame() {
+            document.getElementById('lobby-screen').style.display = 'none';
+            // Ensure proper score display for single player
+            updateScoreDisplay();
+            loadNewImage();
+        }
+
+        function showMultiplayerOptions() {
+            document.getElementById('game-mode-selection').style.display = 'none';
+            document.getElementById('lobby-controls').style.display = 'block';
+
+            // Fetch available lobbies when showing the multiplayer options
+            fetchAvailableLobbies();
+        }
+
+        // Function to create a new lobby
+        function createLobby() {
+            const playerName = document.getElementById('player-name').value.trim();
+            if (!playerName) {
+                showNotification("Please enter your name");
+                return;
+            }
+
+            socket.emit('create_lobby', {
+                player_id: playerId,
+                player_name: playerName
+            });
+        }
+
+        // Function to join an existing lobby
+        function joinLobby() {
+            const playerName = document.getElementById('player-name').value.trim();
+            const lobbyCodeInput = document.getElementById('lobby-id').value.trim();
+
+            if (!playerName) {
+                showNotification("Please enter your name");
+                return;
+            }
+
+            if (!lobbyCodeInput) {
+                showNotification("Please enter a lobby code");
+                return;
+            }
+
+            socket.emit('join_lobby', {
+                player_id: playerId,
+                player_name: playerName,
+                lobby_id: lobbyCodeInput
+            });
+        }
+
+        // Function to start a multiplayer game
+        function startMultiplayerGame() {
+            // Reset flags
+            allPlayersGuessed = false;
+            teamScore = 0;
+
+            // Update score display to show "Team" instead of "You"
+            updateScoreDisplay();
+
+            // Hide sensitive UI elements
+            updateSensitiveUIElements();
+
+            // Emit event to start the game for all players
+            socket.emit('start_game', {
+                lobby_id: lobbyId,
+                player_id: playerId
+            });
+
+            // Show notification that the game is starting
+            showNotification("Starting game...");
+
+            // Reset scores to placeholders
+            document.getElementById('user-score').textContent = pendingScoreDisplay;
+            document.getElementById('ai-score').textContent = pendingScoreDisplay;
+        }
+
+        // Define the submitGuess function
+        function submitGuess() {
+            if (!userGuessCoords) return;
+            if (guessSubmitted) {
+                showNotification("You've already submitted a guess for this round.");
+                return;
+            }
+
+            // Clear the timer
+            clearInterval(timerInterval);
+            document.getElementById('timer').classList.add('hidden');
+
+            // Set the guessSubmitted flag
+            guessSubmitted = true;
+
+            // Disable the buttons to prevent multiple submissions
+            document.getElementById('submit-guess').disabled = true;
+            document.getElementById('guess-btn').disabled = true;
+
+            // Enlarge the map to show the results better
+            enlargeMap();
+
+            const guessData = {
+                lat: userGuessCoords.lat,
+                lng: userGuessCoords.lng
+            };
+
+            // Different handling for single player vs multiplayer
+            if (lobbyId) {
+                // Multiplayer: Send guess via socket
+                socket.emit('player_guess', {
+                    lobby_id: lobbyId,
+                    player_id: playerId,
+                    guess: {
+                        lat: userGuessCoords.lat,
+                        lng: userGuessCoords.lng
+                    }
+                });
+
+                // Also send to the server to calculate points
+                guessData.lobby_id = lobbyId;
+                guessData.player_id = playerId;
+
+                fetch('/submit_multiplayer_guess', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(guessData)
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        showResults(data);
+                        // Note: next button will be enabled when all players have guessed
+                    })
+                    .catch(error => {
+                        console.error('Error submitting guess:', error);
+                        showNotification("Error submitting guess. Please try again.");
+                        document.getElementById('submit-guess').disabled = false;
+                        document.getElementById('guess-btn').disabled = false;
+                        guessSubmitted = false;
+                    });
+            } else {
+                // Single player mode
+                fetch('/submit_guess', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(guessData)
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        // Show results and update scores
+                        showResults(data);
+
+                        // Enable the next round button
+                        document.getElementById('next-image').disabled = false;
+                    })
+                    .catch(error => {
+                        console.error('Error submitting guess:', error);
+                        showNotification("Error submitting guess. Please try again.");
+                        document.getElementById('submit-guess').disabled = false;
+                        document.getElementById('guess-btn').disabled = false;
+                        guessSubmitted = false;
+                    });
+            }
+        }
+
+        // Add a function to explicitly leave a lobby
+        function leaveLobby() {
+            if (lobbyId) {
+                socket.emit('leave_lobby', {
+                    lobby_id: lobbyId,
+                    player_id: playerId
+                });
+
+                // Reset lobby-related variables
+                lobbyId = null;
+                isHost = false;
+
+                // Redirect to home/lobby selection
+                document.getElementById('lobby-screen').style.display = 'flex';
+                document.getElementById('game-mode-selection').style.display = 'flex';
+                document.getElementById('lobby-controls').style.display = 'none';
+                document.getElementById('lobby-info').style.display = 'none';
+            }
+        }
+
+        // Add a function to show results
+        function showResults(data) {
+            // For multiplayer, we don't update user score here as it will be handled by all_guessed event
+            if (!lobbyId) {
+                // Single player mode: update scores immediately
+                userScore += data.user_score;
+                aiScore += data.model_score;
+                document.getElementById('user-score').textContent = userScore;
+                document.getElementById('ai-score').textContent = aiScore;
+            } else if (isHost) {
+                // For host in multiplayer mode: ensure host can see their individual score
+                document.getElementById('results').style.display = 'block';
+            }
+
+            // Store round result for history (store player's individual score for this round)
+            roundsHistory.push({
+                round: currentRound,
+                userScore: data.user_score, // Individual score for this round
+                aiScore: data.model_score,
+                userDistance: Math.round(data.user_distance),
+                aiDistance: Math.round(data.model_distance),
+                winner: data.winner
+            });
+
+            // Populate result card content - always show individual performance in the card
+            document.getElementById('user-distance').textContent = `You: ${Math.round(data.user_distance)} km (${data.user_score} pts)`;
+            document.getElementById('model-distance').textContent = `DeepSeeker: ${Math.round(data.model_distance)} km (${data.model_score} pts)`;
+
+            const winnerEl = document.getElementById('winner');
+            if (data.winner === 'user') {
+                winnerEl.textContent = 'You win this round!';
+                winnerEl.className = 'text-center font-bold text-lg mt-3 pt-2 text-blue-600';
+            } else if (data.winner === 'model') {
+                winnerEl.textContent = 'DeepSeeker wins this round!';
+                winnerEl.className = 'text-center font-bold text-lg mt-3 pt-2 text-violet-600';
+            } else {
+                winnerEl.textContent = "It's a tie!";
+                winnerEl.className = 'text-center font-bold text-lg mt-3 pt-2 text-gray-600';
+            }
+
+            // Store actual location and model prediction for later use
+            if (lobbyId) {
+                // In multiplayer, we'll store the data but only show markers when all have guessed
+                savedActualLocation = data.actual_location;
+                savedModelPrediction = data.model_prediction;
+
+                // Only add the markers if all players have guessed
+                if (allPlayersGuessed || isHost) {
+                    addResultMarkers();
+                }
+            } else {
+                // In single player mode, add markers immediately
+                addActualLocationMarker(data.actual_location);
+                addModelPredictionMarker(data.model_prediction);
+
+                // In single player, always show the results card
+                document.getElementById('results').style.display = 'block';
+            }
+
+            // Update sensitive UI elements visibility based on multiplayer status
+            updateSensitiveUIElements();
+
+            // Ensure the guess buttons stay disabled after showing results
+            document.getElementById('submit-guess').disabled = true;
+            document.getElementById('guess-btn').disabled = true;
+
+            // Explicitly set the guessSubmitted flag
+            guessSubmitted = true;
+
+            // After all the existing code for showing results, add:
+            if (!lobbyId || allPlayersGuessed) {
+                // For single player, or if all players have guessed in multiplayer,
+                // make the map medium size (60% of screen)
+                setTimeout(() => {
+                    toggleMapFullscreen(true);
+                }, 500); // Short delay to ensure results are shown first
+            }
+        }
+
+        // Add storage for actual location and model prediction
+        let savedActualLocation = null;
+        let savedModelPrediction = null;
+
+        // Function to add result markers when all players have guessed
+        function addResultMarkers() {
+            // Only add markers if we have valid data
+            if (savedActualLocation) {
+                addActualLocationMarker(savedActualLocation);
+            }
+            if (savedModelPrediction) {
+                addModelPredictionMarker(savedModelPrediction);
+            }
+        }
+
+        // Function to add actual location marker
+        function addActualLocationMarker(location) {
+            const actualLatLng = L.latLng(location.lat, location.lng);
+            actualMarker = L.marker(actualLatLng, {
+                icon: L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div style="background-color: green; width: 12px; height: 12px; border-radius: 50%;"></div>`,
+                    iconSize: [12, 12],
+                    iconAnchor: [6, 6]
+                })
+            }).addTo(map);
+            actualMarker.bindTooltip("Actual Location");
+        }
+
+        // Function to add model prediction marker
+        function addModelPredictionMarker(prediction) {
+            if (prediction) {
+                const modelLatLng = L.latLng(prediction.lat, prediction.lng);
+                modelMarker = L.marker(modelLatLng, {
+                    icon: L.divIcon({
+                        className: 'custom-div-icon',
+                        html: `<div style="background-color: purple; width: 12px; height: 12px; border-radius: 50%;"></div>`,
+                        iconSize: [12, 12],
+                        iconAnchor: [6, 6]
+                    })
+                }).addTo(map);
+                modelMarker.bindTooltip("DeepSeeker's Guess");
+            }
+        }
+
+        // Function to handle showing the game summary
+        function showGameSummary() {
+            const summaryModal = document.getElementById('game-summary');
+
+            // Update final scores
+            document.getElementById('final-user-score').textContent = userScore;
+            document.getElementById('final-ai-score').textContent = aiScore;
+
+            // Determine and display the winner
+            const finalWinner = document.getElementById('final-winner');
+            if (userScore > aiScore) {
+                finalWinner.textContent = "Winner: You!";
+                finalWinner.className = 'text-xl font-bold text-center mb-4 text-blue-600';
+            } else if (aiScore > userScore) {
+                finalWinner.textContent = "Winner: DeepSeeker!";
+                finalWinner.className = 'text-xl font-bold text-center mb-4 text-violet-600';
+            } else {
+                finalWinner.textContent = "It's a tie!";
+                finalWinner.className = 'text-xl font-bold text-center mb-4 text-gray-600';
+            }
+
+            // Populate round history
+            const historyContainer = document.getElementById('rounds-history');
+            historyContainer.innerHTML = '';
+
+            roundsHistory.forEach(round => {
+                const roundEl = document.createElement('div');
+                roundEl.className = 'py-2';
+                roundEl.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <span class="font-semibold">Round ${round.round}</span>
+                        <span>${round.winner === 'user' ? 'You win' : round.winner === 'model' ? 'DeepSeeker wins' : 'Tie'}</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-sm mt-1">
+                        <div>You: ${round.userScore} pts (${round.userDistance} km)</div>
+                        <div>DeepSeeker: ${round.aiScore} pts (${round.aiDistance} km)</div>
+                    </div>
+                `;
+                historyContainer.appendChild(roundEl);
+            });
+
+            // Show the modal
+            summaryModal.style.display = 'flex';
+        }
+
+        function startNewGame() {
+            document.getElementById('game-summary').style.display = 'none';
+            guessSubmitted = false; // Reset for the new game
+
+            // If in a lobby (multiplayer mode), emit restart_game event
+            if (lobbyId) {
+                socket.emit('restart_game', {
+                    lobby_id: lobbyId,
+                    player_id: playerId
+                });
+
+                // Show notification that we're waiting for the server
+                showNotification("Restarting game...");
+
+                // Reset will be handled by server events
+                return;
+            }
+
+            // Single player mode - reset locally
+            userScore = 0;
+            aiScore = 0;
+            currentRound = 1;
+            roundsHistory = [];
+
+            // Update UI
+            document.getElementById('user-score').textContent = '0';
+            document.getElementById('ai-score').textContent = '0';
+            updateRoundIndicator();
+
+            // Reset the button text
+            document.getElementById('next-image').textContent = "Next Location";
+
+            // Start first round
+            loadNewImage();
+        }
+
+        // Function to handle moving to the next round
+        function nextRound() {
+            if (currentRound >= maxRounds) {
+                showGameSummary();
+                return;
+            }
+
+            // In multiplayer, only the host can advance to the next round
+            if (lobbyId && !isHost) {
+                showNotification("Only the host can advance to the next round");
+                return;
+            }
+
+            // Clear the timer if it's still running
+            clearInterval(timerInterval);
+            document.getElementById('timer').classList.remove('warning');
+            document.getElementById('timer').classList.add('hidden');
+
+            // Disable the button to prevent multiple clicks
+            document.getElementById('next-image').disabled = true;
+
+            // If in a lobby, notify server that this player wants to advance to next round
+            if (lobbyId) {
+                socket.emit('next_round', {
+                    lobby_id: lobbyId,
+                    player_id: playerId
+                });
+
+                // Show message that we're moving to next round
+                showNotification("Moving to next location...");
+            } else {
+                // Single player mode - continue immediately
+                currentRound++;
+                updateRoundIndicator();
+
+                // Update the button text based on the round number
+                if (currentRound === maxRounds) {
+                    document.getElementById('next-image').textContent = "Show Final Results";
+                } else {
+                    document.getElementById('next-image').textContent = "Next Location";
+                }
+
+                loadNewImage();
+            }
+
+            // Reset the allPlayersGuessed flag when moving to next round
+            allPlayersGuessed = false;
+
+            // Hide sensitive UI elements
+            updateSensitiveUIElements();
+
+            // Reset saved locations
+            savedActualLocation = null;
+            savedModelPrediction = null;
+
+            // Remove enlarged class from map container
+            document.getElementById('map-container').classList.remove('enlarged');
+
+            // Exit fullscreen mode before moving to next round
+            if (mapFullscreen) {
+                toggleMapFullscreen(false);
+            }
+
+            // Reset scores to placeholders in multiplayer when moving to next round
+            if (lobbyId) {
+                document.getElementById('user-score').textContent = pendingScoreDisplay;
+                document.getElementById('ai-score').textContent = pendingScoreDisplay;
+            }
+        }
+
+        // Hide sensitive UI elements until all players have guessed
+        function updateSensitiveUIElements() {
+            const resultsCard = document.getElementById('results');
+            const scorePanel = document.querySelector('.score-panel');
+
+            if (lobbyId) {
+                // In multiplayer mode:
+                // Always show score panel, but the contents are controlled by updateScoreDisplay
+                if (scorePanel) scorePanel.style.display = 'flex';
+
+                // For results card, show when all players have guessed or for host when they've guessed
+                if (resultsCard) {
+                    if (allPlayersGuessed || (isHost && guessSubmitted)) {
+                        resultsCard.style.display = 'block';
+                    } else {
+                        resultsCard.style.display = 'none';
+                    }
+                }
+            } else {
+                // In single player mode, always show the score panel
+                if (scorePanel) scorePanel.style.display = 'flex';
+                // Results card is shown in showResults()
+            }
+        }
+
+        // Function to enlarge the map after submitting a guess
+        function enlargeMap() {
+            const mapContainer = document.getElementById('map-container');
+
+            // Remove collapsed state if it exists
+            mapContainer.classList.remove('collapsed');
+
+            // Add enlarged class to make map bigger
+            mapContainer.classList.add('enlarged');
+
+            // Make sure map is visible
+            mapExpanded = true;
+
+            // Need to invalidate the map size after enlarging
+            setTimeout(() => {
+                map.invalidateSize();
+            }, 300);
+        }
+
+        // Update the score display to show "Team" instead of "You" for multiplayer
+        // and initialize with appropriate placeholder
+        function updateScoreDisplay() {
+            const scorePanel = document.querySelector('.score-panel');
+            if (scorePanel) {
+                const userScoreLabel = scorePanel.querySelector('div:first-child');
+                const aiScoreLabel = scorePanel.querySelector('div:last-child');
+
+                if (userScoreLabel) {
+                    if (lobbyId) {
+                        // For multiplayer, show Team label and placeholder
+                        userScoreLabel.innerHTML = `Team: <span id="user-score" class="font-bold">${pendingScoreDisplay}</span>`;
+                        if (aiScoreLabel) {
+                            aiScoreLabel.innerHTML = `DeepSeeker: <span id="ai-score" class="font-bold">${pendingScoreDisplay}</span>`;
+                        }
+                    } else {
+                        // For single player, show real scores immediately
+                        userScoreLabel.innerHTML = `You: <span id="user-score" class="font-bold">0</span>`;
+                        if (aiScoreLabel) {
+                            aiScoreLabel.innerHTML = `DeepSeeker: <span id="ai-score" class="font-bold">0</span>`;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Add a window beforeunload event to notify server when the player closes the browser
+        window.addEventListener('beforeunload', function () {
+            if (lobbyId) {
+                // Try to notify the server that we're leaving
+                socket.emit('leave_lobby', {
+                    lobby_id: lobbyId,
+                    player_id: playerId
+                });
+            }
+        });
+
+        // Function to start the timer
+        function startTimer() {
+            clearInterval(timerInterval);
+            timeRemaining = 120;
+            updateTimerDisplay();
+
+            timerInterval = setInterval(() => {
+                timeRemaining--;
+                updateTimerDisplay();
+
+                // Add warning class when 30 seconds or less remain
+                if (timeRemaining <= 30) {
+                    document.getElementById('timer').classList.add('warning');
+                }
+
+                if (timeRemaining <= 0) {
+                    clearInterval(timerInterval);
+                    if (!guessSubmitted) {
+                        submitRandomGuess();
+                    }
+                }
+            }, 1000);
+
+            // Show the timer
+            document.getElementById('timer').classList.remove('hidden');
+        }
+
+        // Function to update timer display
+        function updateTimerDisplay() {
+            const minutes = Math.floor(timeRemaining / 60);
+            const seconds = timeRemaining % 60;
+            document.getElementById('timer').textContent =
+                `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        // Function to submit a random guess
+        function submitRandomGuess() {
+            // Generate random coordinates
+            const randomLat = Math.random() * 180 - 90;
+            const randomLng = Math.random() * 360 - 180;
+
+            // Add marker for random guess
+            if (marker) map.removeLayer(marker);
+            marker = L.marker([randomLat, randomLng]).addTo(map);
+            userGuessCoords = { lat: randomLat, lng: randomLng };
+
+            // Submit the guess
+            submitGuess();
+        }
+
+        // Function to toggle map fullscreen mode
+        function toggleMapFullscreen(force = null) {
+            const mapContainer = document.getElementById('map-container');
+
+            // If force is provided, set to that state, otherwise toggle
+            if (force !== null) {
+                mapFullscreen = force;
+            } else {
+                mapFullscreen = !mapFullscreen;
+            }
+
+            if (mapFullscreen) {
+                // Use medium-view instead of fullscreen
+                mapContainer.classList.remove('fullscreen');
+                mapContainer.classList.add('medium-view');
+
+                // Move the results card inside the map container for better visibility
+                const resultsCard = document.getElementById('results');
+                if (resultsCard) {
+                    mapContainer.appendChild(resultsCard);
+                }
+
+                // Ensure controls are visible
+                document.getElementById('fullscreen-toggle').style.display = 'block';
+
+                // Update the fullscreen Next button to match the state of the regular Next button
+                const nextBtn = document.getElementById('next-image');
+                const fullscreenNextBtn = document.getElementById('fullscreen-next-btn');
+
+                // Copy the text and disabled state
+                fullscreenNextBtn.textContent = nextBtn.textContent;
+                fullscreenNextBtn.disabled = nextBtn.disabled;
+                if (nextBtn.disabled) {
+                    fullscreenNextBtn.classList.add('opacity-50');
+                } else {
+                    fullscreenNextBtn.classList.remove('opacity-50');
+                }
+
+                // Center the map on the markers
+                centerMapOnMarkers();
+            } else {
+                // Exit map medium-view mode
+                mapContainer.classList.remove('fullscreen');
+                mapContainer.classList.remove('medium-view');
+
+                // Move results card back to its original position
+                const resultsCard = document.getElementById('results');
+                if (resultsCard && mapContainer.contains(resultsCard)) {
+                    document.body.appendChild(resultsCard);
+                }
+
+                // Hide fullscreen toggle
+                document.getElementById('fullscreen-toggle').style.display = 'none';
+            }
+
+            // Need to invalidate the map size after changing display
+            setTimeout(() => {
+                map.invalidateSize();
+                if (mapFullscreen) {
+                    centerMapOnMarkers();
+                }
+            }, 300);
+        }
+
+        // Function to center the map on all the relevant markers
+        function centerMapOnMarkers() {
+            // Create a group of all markers
+            const markers = [];
+
+            // Add user marker if it exists
+            if (marker) markers.push(marker);
+
+            // Add actual location marker if it exists
+            if (actualMarker) markers.push(actualMarker);
+
+            // Add model prediction marker if it exists
+            if (modelMarker) markers.push(modelMarker);
+
+            // Add other player markers
+            map.eachLayer(layer => {
+                if (layer._playerMarker) {
+                    markers.push(layer);
+                }
+            });
+
+            if (markers.length > 0) {
+                // Create a bounds object and extend it with each marker
+                const bounds = L.latLngBounds();
+                markers.forEach(m => bounds.extend(m.getLatLng()));
+
+                // Fit the map to these bounds with some padding
+                map.fitBounds(bounds, {
+                    padding: [50, 50],
+                    maxZoom: 10
+                });
+            }
+        }
+
+                    // Add function to fetch and display available lobbies
+            function fetchAvailableLobbies() {
+                socket.emit('get_lobbies');
+            }
+
+                    // Initialize geospatial map
+        function initializeGeospatialMap() {
+            if (!geospatialInitialized) return;
+
+            const mapContainer = document.getElementById('geospatial-map');
+            mapContainer.innerHTML = '';
+
+            try {
+                // Create Earth Engine map using the proper API
+                earthEngineMap = ee.Map({
+                    target: mapContainer,
+                    center: [0, 0],
+                    zoom: 2
+                });
+
+                // Add satellite base layer
+                const satelliteLayer = ee.ImageCollection('USGS/SRTMGL1_003')
+                    .select('elevation')
+                    .mosaic();
+
+                earthEngineMap.addLayer(satelliteLayer, {
+                    min: 0,
+                    max: 3000,
+                    palette: ['006633', 'E5FFCC', '662A00', 'D8D8D8', 'F5F5F5']
+                }, 'Elevation');
+
+                // Add click handler for heatmap generation
+                earthEngineMap.onClick(function(coords) {
+                    generateHeatmap(coords);
+                });
+
+                // Hide loading message
+                document.querySelector('.geospatial-loading').style.display = 'none';
+            } catch (error) {
+                console.error('Error initializing Earth Engine map:', error);
+                // Fallback to Leaflet map
+                initializeFallbackMap();
+            }
+        }
+
+            // Generate similarity heatmap
+            function generateHeatmap(coords) {
+                if (!geospatialInitialized) return;
+
+                currentHeatmapPoint = coords;
+                
+                // Show loading
+                document.querySelector('.geospatial-loading').style.display = 'block';
+                document.querySelector('.geospatial-loading').textContent = 'Generating heatmap...';
+
+                try {
+                    // Earth Engine code for similarity search
+                    const embeddings = ee.ImageCollection('GOOGLE/SATELLITE_EMBEDDING/V1/ANNUAL');
+                    const YEAR = 2024;
+                    const dateFilter = ee.Filter.date(YEAR + '-01-01', (YEAR + 1) + '-01-01');
+                    const mosaic = embeddings.filter(dateFilter).mosaic();
+                    const bandNames = mosaic.bandNames();
+
+                    // Create point geometry
+                    const point = ee.Geometry.Point([coords.lon, coords.lat]);
+
+                    // Calculate similarity using dot product
+                    const similarity = ee.ImageCollection(
+                        mosaic.sample({ region: point, scale: 10 }).map(function (f) {
+                            return ee.Image(f.toArray(bandNames))
+                                .arrayFlatten(ee.List([bandNames]))
+                                .multiply(mosaic)
+                                .reduce('sum');
+                        })
+                    );
+
+                    // Add similarity layer to map
+                    earthEngineMap.addLayer(similarity, {
+                        palette: ['000004', '2C105C', '711F81', 'B63679', 'EE605E', 'FDAE78', 'FCFDBF', 'FFFFFF'],
+                        min: 0,
+                        max: 1
+                    }, 'Similarity Heatmap');
+
+                    // Hide loading
+                    document.querySelector('.geospatial-loading').style.display = 'none';
+                } catch (error) {
+                    console.error('Error generating heatmap:', error);
+                    document.querySelector('.geospatial-loading').textContent = 'Error generating heatmap';
+                    setTimeout(() => {
+                        document.querySelector('.geospatial-loading').style.display = 'none';
+                    }, 2000);
+                }
+            }
+
+            // Refresh geospatial map
+            function refreshGeospatialMap() {
+                if (!geospatialInitialized) return;
+                
+                // Check if it's an Earth Engine map or fallback map
+                if (earthEngineMap && earthEngineMap.layers) {
+                    // Earth Engine map
+                    earthEngineMap.layers().reset();
+                    
+                    // Re-add base layer
+                    const baseLayer = ee.ImageCollection('USGS/SRTMGL1_003')
+                        .select('elevation')
+                        .mosaic();
+
+                    earthEngineMap.addLayer(baseLayer, {
+                        min: 0,
+                        max: 3000,
+                        palette: ['006633', 'E5FFCC', '662A00', 'D8D8D8', 'F5F5F5']
+                    });
+                } else if (earthEngineMap && earthEngineMap.eachLayer) {
+                    // Leaflet fallback map
+                    earthEngineMap.eachLayer((layer) => {
+                        if (layer instanceof L.LayerGroup) {
+                            earthEngineMap.removeLayer(layer);
+                        }
+                    });
+                }
+
+                currentHeatmapPoint = null;
+            }
+
+            // Toggle geospatial view
+            function toggleGeospatialView() {
+                const container = document.getElementById('geospatial-container');
+                if (container.style.display === 'none') {
+                    container.style.display = 'flex';
+                } else {
+                    container.style.display = 'none';
+                }
+            }
+
+        // Function to submit a query about the current location
+        function submitQuery() {
+            const queryText = document.getElementById('query-textarea').value.trim();
+            const queryButton = document.getElementById('query-button');
+            const queryResponse = document.getElementById('query-response');
+
+            if (!queryText) {
+                showNotification("Please enter a question");
+                return;
+            }
+
+            if (!currentImagePath) {
+                showNotification("No image loaded. Please wait for the next location.");
+                return;
+            }
+
+            // Disable button and show loading state
+            queryButton.disabled = true;
+            queryButton.textContent = "Sending...";
+            queryResponse.textContent = "Processing your query...";
+
+            // Prepare the query data
+            const queryData = {
+                query: queryText,
+                image_path: currentImagePath,
+                full_image_path: fullImagePath
+            };
+
+            // Add lobby ID if in multiplayer mode
+            if (lobbyId) {
+                queryData.lobby_id = lobbyId;
+            }
+
+            // Send the query to the server
+            fetch('/submit_query', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(queryData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    queryResponse.textContent = data.response;
+                } else {
+                    queryResponse.textContent = "Error: " + (data.error || "Failed to process query");
+                }
+            })
+            .catch(error => {
+                console.error('Error submitting query:', error);
+                queryResponse.textContent = "Error: Failed to send query. Please try again.";
+            })
+            .finally(() => {
+                // Re-enable button
+                queryButton.disabled = false;
+                queryButton.textContent = "Send Query";
+            });
+        }
+
+        // Function to clear query response when loading new image
+        function clearQueryResponse() {
+            const queryResponse = document.getElementById('query-response');
+            const queryTextarea = document.getElementById('query-textarea');
+            queryResponse.textContent = '';
+            queryTextarea.value = '';
+        }
+    </script>
+</body>
+
+</html>
