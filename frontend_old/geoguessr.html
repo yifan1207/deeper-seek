@@ -282,6 +282,64 @@
             z-index: 20;
         }
 
+        /* Heatmap debug panel */
+        .heatmap-debug {
+            position: fixed;
+            bottom: 12px;
+            left: 12px;
+            width: 420px;
+            max-height: 180px;
+            overflow-y: auto;
+            z-index: 1002;
+            background: rgba(255,255,255,0.9);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            font-size: 12px;
+            color: #111827;
+            padding: 8px 10px;
+            line-height: 1.35;
+        }
+
+        /* Geospatial legend (HTML overlay replacing EE ui.Panel) */
+        .geospatial-legend {
+            position: absolute;
+            left: 20px;
+            bottom: 20px;
+            z-index: 21;
+            background: rgba(255, 255, 255, 0.85);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            padding: 10px 12px;
+            width: 280px;
+        }
+
+        .geospatial-legend .legend-title {
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 6px;
+            color: #111827;
+        }
+
+        .geospatial-legend .legend-bar {
+            height: 12px;
+            border-radius: 4px;
+            background: linear-gradient(to right, #000004, #2C105C, #711F81, #B63679, #EE605E, #FDAE78, #FCFDBF, #FFFFFF);
+            margin: 4px 0 6px 0;
+        }
+
+        .geospatial-legend .legend-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #374151;
+        }
+
+        .geospatial-legend .legend-coords {
+            margin-top: 6px;
+            font-size: 13px;
+            color: #111827;
+        }
+
         /* Keep hover effects but respect enlarged state */
         /* Removed hover expansion effect */
 
@@ -629,17 +687,23 @@
             <div id="geospatial-map" class="geospatial-map">
                 <div class="geospatial-loading">Loading Earth Engine...</div>
             </div>
-            <div class="geospatial-controls">
-                <button id="geospatial-refresh" class="geospatial-button">Refresh</button>
-                <button id="geospatial-toggle" class="geospatial-button">Toggle View</button>
+            <!-- Similarity legend overlay -->
+            <div id="geospatial-legend" class="geospatial-legend" style="display:none;">
+                <div class="legend-title">Similarity in embedding space</div>
+                <div class="legend-bar"></div>
+                <div class="legend-labels"><span>Less similar</span><span>More similar</span></div>
+                <div id="legend-coords" class="legend-coords"></div>
             </div>
         </div>
 
         <!-- Query Text Box - Right Side -->
         <div id="query-container" class="query-container">
-            <div class="query-header">Ask a question about this location:</div>
+            <div class="query-header" style="text-align: center;">Ask a question about this location</div>
             <textarea id="query-textarea" class="query-textarea" placeholder="e.g., What country is this? What landmarks can you see? What's the climate like here?"></textarea>
-            <button id="query-button" class="query-button">Send Query</button>
+            <div style="display:flex; gap:8px; margin-top:12px;">
+                <button id="query-button" class="query-button" style="flex:1;">Send Query</button>
+                <button id="similarity-heatmap-btn" class="query-button" style="background:#10b981; flex:1;">Similarity Heatmap</button>
+            </div>
             <div id="query-response" class="query-response"></div>
         </div>
 
@@ -686,6 +750,9 @@
             </button>
         </div>
     </div>
+
+    <!-- Debug output for heatmap calculations -->
+    <pre id="heatmap-debug" class="heatmap-debug" style="display:none;"></pre>
 
     <!-- Results Card -->
     <div id="results"
@@ -1534,16 +1601,27 @@
 
         // Initialize Google Earth Engine
         function initializeEarthEngine() {
+            debugLog('initializeEarthEngine called');
+            if (typeof ee === 'undefined') {
+                debugLog('Earth Engine not available, using fallback map');
+                console.log('Earth Engine not available, using fallback map');
+                initializeFallbackMap();
+                return;
+            }
+
             try {
+                debugLog('Attempting Earth Engine initialization');
                 // Initialize Earth Engine with proper configuration
                 ee.initialize({
                     apiKey: EARTH_ENGINE_API_KEY,
                     authToken: null
                 }, function() {
+                    debugLog('Earth Engine initialized successfully');
                     console.log('Earth Engine initialized successfully');
                     geospatialInitialized = true;
                     initializeGeospatialMap();
                 }, function(error) {
+                    debugLog(`Earth Engine initialization failed: ${error}`);
                     console.error('Earth Engine initialization failed:', error);
                     document.querySelector('.geospatial-loading').textContent = 'Earth Engine failed to load';
                     // Fallback to a simple map
@@ -1551,6 +1629,7 @@
                 });
 
             } catch (error) {
+                debugLog(`Failed to initialize Earth Engine: ${error.message || error}`);
                 console.error('Failed to initialize Earth Engine:', error);
                 document.querySelector('.geospatial-loading').textContent = 'Failed to load Earth Engine';
                 // Fallback to a simple map
@@ -1560,95 +1639,171 @@
 
         // Fallback map using Leaflet
         function initializeFallbackMap() {
+            debugLog('initializeFallbackMap called');
             const mapContainer = document.getElementById('geospatial-map');
+            if (!mapContainer) {
+                debugLog('ERROR: geospatial-map container not found');
+                return;
+            }
+            debugLog('Found geospatial-map container');
             mapContainer.innerHTML = '';
             
-            // Create a simple Leaflet map as fallback
-            const fallbackMap = L.map(mapContainer, {
-                zoomControl: false,
-                doubleClickZoom: false,
-                worldCopyJump: true,
-                maxBounds: [[-90, -180], [90, 180]],
-                maxBoundsViscosity: 1.0,
-                minZoom: 2
-            }).setView([0, 0], 2);
+            try {
+                // Create a simple Leaflet map as fallback
+                const fallbackMap = L.map(mapContainer, {
+                    zoomControl: false,
+                    doubleClickZoom: false,
+                    worldCopyJump: true,
+                    maxBounds: [[-90, -180], [90, 180]], // Tighter bounds to prevent side bars
+                    maxBoundsViscosity: 1.0,
+                    minZoom: 2.5
+                }).setView([0, 0], 2.5);
+                debugLog('Created Leaflet fallback map');
 
-            // Add satellite tile layer for better appearance
-            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                maxZoom: 19,
-                noWrap: true,
-                attribution: '&copy; <a href="https://www.esri.com/">Esri</a>'
-            }).addTo(fallbackMap);
+                // Add satellite tile layer for better appearance
+                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                    maxZoom: 19,
+                    noWrap: true,
+                    attribution: '&copy; <a href="https://www.esri.com/">Esri</a>'
+                }).addTo(fallbackMap);
+                debugLog('Added satellite tile layer');
 
-            // Zoom control removed as requested
+                // Zoom control removed as requested
 
-            // Add click handler
-            fallbackMap.on('click', function(e) {
-                generateFallbackHeatmap(e.latlng);
-            });
+                // Add click handler
+                fallbackMap.on('click', function(e) {
+                    debugLog(`Fallback map clicked at lat=${e.latlng.lat}, lng=${e.latlng.lng}`);
+                    generateFallbackHeatmap(e.latlng);
+                });
+                debugLog('Added click handler to fallback map');
 
-            // Store reference
-            earthEngineMap = fallbackMap;
-            geospatialInitialized = true;
+                // Store reference
+                earthEngineMap = fallbackMap;
+                geospatialInitialized = true;
+                debugLog('Fallback map initialization complete');
 
-            // Hide loading message
-            document.querySelector('.geospatial-loading').style.display = 'none';
+                // Hide loading message
+                const loadingEl = document.querySelector('.geospatial-loading');
+                if (loadingEl) {
+                    loadingEl.style.display = 'none';
+                    debugLog('Loading message hidden');
+                }
+            } catch (error) {
+                debugLog(`initializeFallbackMap ERROR: ${error.message || error}`);
+                console.error('Fallback map initialization error:', error);
+            }
         }
 
         // Generate fallback heatmap
         function generateFallbackHeatmap(latlng) {
-            if (!geospatialInitialized) return;
-
-            currentHeatmapPoint = latlng;
-            
-            // Show loading
-            document.querySelector('.geospatial-loading').style.display = 'block';
-            document.querySelector('.geospatial-loading').textContent = 'Generating heatmap...';
-
-            // Create a more sophisticated heatmap effect
-            const heatmapLayer = L.layerGroup();
-            
-            // Generate points with geographic clustering (more realistic)
-            const numPoints = 100;
-            const baseLat = latlng.lat;
-            const baseLng = latlng.lng;
-            
-            for (let i = 0; i < numPoints; i++) {
-                // Create clusters around the clicked point
-                const clusterRadius = 15; // degrees
-                const angle = (i / numPoints) * 2 * Math.PI;
-                const distance = Math.random() * clusterRadius;
-                
-                const randomLat = baseLat + Math.cos(angle) * distance * Math.random();
-                const randomLng = baseLng + Math.sin(angle) * distance * Math.random();
-                
-                // Calculate intensity based on distance from center
-                const distanceFromCenter = Math.sqrt(
-                    Math.pow(randomLat - baseLat, 2) + Math.pow(randomLng - baseLng, 2)
-                );
-                const intensity = Math.max(0, 1 - (distanceFromCenter / clusterRadius));
-                
-                // Add some randomness to make it more realistic
-                const finalIntensity = intensity * (0.5 + Math.random() * 0.5);
-                
-                const circle = L.circle([randomLat, randomLng], {
-                    radius: 30000 + (finalIntensity * 100000),
-                    fillColor: finalIntensity > 0.8 ? '#FCFDBF' : 
-                              finalIntensity > 0.6 ? '#FDAE78' : 
-                              finalIntensity > 0.4 ? '#EE605E' : 
-                              finalIntensity > 0.2 ? '#B63679' : '#711F81',
-                    color: 'transparent',
-                    fillOpacity: 0.4 + (finalIntensity * 0.4)
-                });
-                
-                heatmapLayer.addLayer(circle);
+            debugLog(`generateFallbackHeatmap called with lat=${latlng.lat}, lng=${latlng.lng}`);
+            if (!geospatialInitialized) {
+                debugLog('generateFallbackHeatmap: geospatialInitialized is false');
+                return;
+            }
+            if (!earthEngineMap) {
+                debugLog('generateFallbackHeatmap: earthEngineMap is null/undefined');
+                return;
             }
 
-            // Add to map
-            earthEngineMap.addLayer(heatmapLayer);
+            try {
+                currentHeatmapPoint = latlng;
+                
+                // Show loading
+                const loadingEl = document.querySelector('.geospatial-loading');
+                if (loadingEl) {
+                    loadingEl.style.display = 'block';
+                    loadingEl.textContent = 'Generating fallback heatmap...';
+                    debugLog('Loading message shown');
+                }
 
-            // Hide loading
-            document.querySelector('.geospatial-loading').style.display = 'none';
+                // Clear existing heatmap layers first
+                if (earthEngineMap.eachLayer) {
+                    earthEngineMap.eachLayer((layer) => {
+                        if (layer instanceof L.LayerGroup && layer !== earthEngineMap._layers) {
+                            earthEngineMap.removeLayer(layer);
+                        }
+                    });
+                    debugLog('Cleared existing layers');
+                }
+
+                // Create a more sophisticated heatmap effect
+                const heatmapLayer = L.layerGroup();
+                debugLog('Created heatmap layer group');
+                
+                // Generate points with geographic clustering (more realistic)
+                const numPoints = 100;
+                const baseLat = latlng.lat;
+                const baseLng = latlng.lng;
+                const viewBounds = (earthEngineMap && earthEngineMap.getBounds) ? earthEngineMap.getBounds() : null;
+                debugLog(`Generating ${numPoints} points around lat=${baseLat}, lng=${baseLng}`);
+                if (viewBounds) debugLog('Using view bounds constraint');
+                
+                let pointsAdded = 0;
+                for (let i = 0; i < numPoints; i++) {
+                    // Create clusters around the clicked point
+                    const clusterRadius = 15; // degrees
+                    const angle = (i / numPoints) * 2 * Math.PI;
+                    const distance = Math.random() * clusterRadius;
+                    
+                    const randomLat = baseLat + Math.cos(angle) * distance * Math.random();
+                    const randomLng = baseLng + Math.sin(angle) * distance * Math.random();
+                    
+                    // Calculate intensity based on distance from center
+                    const distanceFromCenter = Math.sqrt(
+                        Math.pow(randomLat - baseLat, 2) + Math.pow(randomLng - baseLng, 2)
+                    );
+                    const intensity = Math.max(0, 1 - (distanceFromCenter / clusterRadius));
+                    
+                    // Add some randomness to make it more realistic
+                    const finalIntensity = intensity * (0.5 + Math.random() * 0.5);
+                    
+                    // Keep inside current view when possible
+                    if (viewBounds && !viewBounds.contains(L.latLng(randomLat, randomLng))) {
+                        continue;
+                    }
+
+                    const circle = L.circle([randomLat, randomLng], {
+                        radius: 30000 + (finalIntensity * 100000),
+                        fillColor: finalIntensity > 0.8 ? '#FCFDBF' : 
+                                  finalIntensity > 0.6 ? '#FDAE78' : 
+                                  finalIntensity > 0.4 ? '#EE605E' : 
+                                  finalIntensity > 0.2 ? '#B63679' : '#711F81',
+                        color: 'transparent',
+                        fillOpacity: 0.4 + (finalIntensity * 0.4)
+                    });
+                    
+                    heatmapLayer.addLayer(circle);
+                    pointsAdded++;
+                }
+                debugLog(`Added ${pointsAdded} circles to heatmap layer`);
+
+                // Add to map
+                if (earthEngineMap && earthEngineMap.addLayer) {
+                    earthEngineMap.addLayer(heatmapLayer);
+                    debugLog('Heatmap layer added to map');
+                } else {
+                    debugLog('ERROR: Cannot add layer to earthEngineMap');
+                }
+
+                // Hide loading
+                if (loadingEl) {
+                    loadingEl.style.display = 'none';
+                    debugLog('Loading message hidden');
+                }
+                
+                // Show legend with coords
+                updateLegend(baseLng, baseLat, 'Fallback heatmap rendered');
+                debugLog('Legend updated');
+                
+            } catch (error) {
+                debugLog(`generateFallbackHeatmap ERROR: ${error.message || error}`);
+                console.error('Fallback heatmap error:', error);
+                const loadingEl = document.querySelector('.geospatial-loading');
+                if (loadingEl) {
+                    loadingEl.style.display = 'none';
+                }
+            }
         }
 
         // Initialize the map
@@ -1676,14 +1831,14 @@
                 worldCopyJump: true,
                 // Add maxBounds to constrain the view to Earth's coordinates
                 maxBounds: [
-                    [-90, -180], // Southwest corner
-                    [90, 180]    // Northeast corner
+                    [-85, -180], // Southwest corner - tighter bounds
+                    [85, 180]    // Northeast corner - tighter bounds
                 ],
                 // Prevent the user from dragging outside the bounds
                 maxBoundsViscosity: 1.0,
-                // Set minimum zoom to prevent zooming out too far
-                minZoom: 2
-            }).setView([0, 0], 2);
+                // Set minimum zoom to prevent zooming out too far and showing side bars
+                minZoom: 3
+            }).setView([0, 0], 3);
 
             // Zoom control removed as requested
 
@@ -1840,9 +1995,11 @@
                 }
             });
 
-            // Add geospatial functionality
-            document.getElementById('geospatial-refresh').addEventListener('click', refreshGeospatialMap);
-            document.getElementById('geospatial-toggle').addEventListener('click', toggleGeospatialView);
+            // Add geospatial functionality (if buttons exist)
+            const geoRefreshBtn = document.getElementById('geospatial-refresh');
+            if (geoRefreshBtn) geoRefreshBtn.addEventListener('click', refreshGeospatialMap);
+            const geoToggleBtn = document.getElementById('geospatial-toggle');
+            if (geoToggleBtn) geoToggleBtn.addEventListener('click', toggleGeospatialView);
 
             // Add query functionality
             document.getElementById('query-button').addEventListener('click', submitQuery);
@@ -1851,6 +2008,17 @@
                     submitQuery();
                 }
             });
+            // Similarity heatmap search wiring
+            const heatmapBtn = document.getElementById('similarity-heatmap-btn');
+            if (heatmapBtn) {
+                debugLog('Similarity Heatmap button found and listener attached');
+                heatmapBtn.addEventListener('click', () => {
+                    debugLog('Similarity Heatmap clicked');
+                    searchAndGenerateHeatmap();
+                });
+            } else {
+                debugLog('Similarity Heatmap button NOT found');
+            }
         });
 
         // Add functions to support the UI flow
@@ -2620,8 +2788,23 @@
                         })
                     );
 
+                    // Clip to current view bounds if available
+                    try {
+                        if (earthEngineMap && earthEngineMap.getBounds) {
+                            const b = earthEngineMap.getBounds();
+                            const sw = b.getSouthWest ? b.getSouthWest() : { lat: b[0][0], lng: b[0][1] };
+                            const ne = b.getNorthEast ? b.getNorthEast() : { lat: b[1][0], lng: b[1][1] };
+                            const region = ee.Geometry.Rectangle([sw.lng || sw.lon, sw.lat, ne.lng || ne.lon, ne.lat]);
+                            const clipped = ee.ImageCollection(similarity).mosaic().clip(region);
+                            similarityDisplay = clipped;
+                            debugLog(`EE clip region SW(${sw.lat},${sw.lng}) NE(${ne.lat},${ne.lng})`);
+                        }
+                    } catch (_) {}
+
+                    const similarityDisplay = typeof similarityDisplay !== 'undefined' ? similarityDisplay : ee.ImageCollection(similarity).mosaic();
+
                     // Add similarity layer to map
-                    earthEngineMap.addLayer(similarity, {
+                    earthEngineMap.addLayer(similarityDisplay, {
                         palette: ['000004', '2C105C', '711F81', 'B63679', 'EE605E', 'FDAE78', 'FCFDBF', 'FFFFFF'],
                         min: 0,
                         max: 1
@@ -2629,13 +2812,39 @@
 
                     // Hide loading
                     document.querySelector('.geospatial-loading').style.display = 'none';
+                    // Show legend
+                    updateLegend(coords.lon, coords.lat, 'EE heatmap rendered');
                 } catch (error) {
                     console.error('Error generating heatmap:', error);
+                    debugLog(`EE error: ${error?.message || error}`);
                     document.querySelector('.geospatial-loading').textContent = 'Error generating heatmap';
                     setTimeout(() => {
                         document.querySelector('.geospatial-loading').style.display = 'none';
                     }, 2000);
                 }
+            }
+
+            // Update legend helper (HTML overlay)
+            function updateLegend(lon, lat, extra = '') {
+                const legend = document.getElementById('geospatial-legend');
+                const label = document.getElementById('legend-coords');
+                if (legend) legend.style.display = 'block';
+                if (label && lon !== undefined && lat !== undefined) {
+                    const fixedLon = Number(lon).toFixed(4);
+                    const fixedLat = Number(lat).toFixed(4);
+                    label.textContent = `${fixedLon}, ${fixedLat}`;
+                }
+                debugLog(extra);
+            }
+
+            // Debug logging helper
+            function debugLog(message) {
+                const box = document.getElementById('heatmap-debug');
+                if (!box) return;
+                if (box.style.display !== 'block') box.style.display = 'block';
+                const now = new Date().toISOString().split('T')[1].replace('Z','');
+                box.textContent += `\n[${now}] ${message}`;
+                box.scrollTop = box.scrollHeight;
             }
 
             // Refresh geospatial map
@@ -2745,6 +2954,162 @@
             const queryTextarea = document.getElementById('query-textarea');
             queryResponse.textContent = '';
             queryTextarea.value = '';
+        }
+
+        // Search -> geocode -> generate similarity heatmap
+        async function searchAndGenerateHeatmap() {
+            const input = document.getElementById('query-textarea').value.trim();
+            if (!input) {
+                showNotification('Enter a place or "lat, lng"');
+                return;
+            }
+
+            // Try direct coordinates: "lat, lng"
+            debugLog(`Search input: ${input}`);
+            const coordMatch = input.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+            if (coordMatch) {
+                const lat = parseFloat(coordMatch[1]);
+                const lon = parseFloat(coordMatch[2]);
+                debugLog(`Parsed coordinates lat=${lat}, lon=${lon}`);
+                await triggerHeatmapFromCoords({ lon, lat });
+                return;
+            }
+
+            // Geocode place name (tries multiple providers, CORS-friendly)
+            try {
+                const result = await geocodePlace(input);
+                debugLog(`Geocode result: ${JSON.stringify(result)}`);
+                if (!result) {
+                    showNotification('Place not found');
+                    debugLog('Geocode returned null');
+                    return;
+                }
+                await triggerHeatmapFromCoords(result);
+            } catch (e) {
+                console.error('Geocoding error', e);
+                debugLog(`Geocoding error: ${e?.message || e}`);
+                showNotification('Place not found');
+            }
+        }
+
+        async function triggerHeatmapFromCoords(coords) {
+            // Prefer EE heatmap when available; fallback if it throws
+            if (typeof ee !== 'undefined' && geospatialInitialized && earthEngineMap && earthEngineMap.addLayer) {
+                try {
+                    debugLog(`Calling EE generateHeatmap with ${JSON.stringify(coords)}`);
+                    generateHeatmap(coords);
+                    return;
+                } catch (e) {
+                    console.error('EE heatmap error; using fallback', e);
+                    debugLog(`EE heatmap error: ${e?.message || e}`);
+                }
+            }
+            // Try to initialize EE on-demand if not available
+            if (typeof ee !== 'undefined' && (!earthEngineMap || !earthEngineMap.layers)) {
+                debugLog('Attempting on-demand Earth Engine initialization');
+                try {
+                    await new Promise((resolve, reject) => {
+                        try {
+                            ee.initialize({ apiKey: EARTH_ENGINE_API_KEY, authToken: null }, () => {
+                                try {
+                                    initializeGeospatialMap();
+                                    resolve(true);
+                                } catch (e) { reject(e); }
+                            }, (err) => reject(err));
+                        } catch (e) { reject(e); }
+                    });
+                    if (earthEngineMap && earthEngineMap.addLayer) {
+                        debugLog('On-demand EE initialization succeeded; generating heatmap');
+                        generateHeatmap(coords);
+                        return;
+                    }
+                } catch (e) {
+                    debugLog(`On-demand EE init failed: ${e?.message || e}`);
+                }
+            }
+            if (earthEngineMap && earthEngineMap.setView) {
+                // Fallback map expects Leaflet lat/lng
+                debugLog(`Using fallback heatmap with lat=${coords.lat}, lon=${coords.lon}`);
+                generateFallbackHeatmap({ lat: coords.lat, lng: coords.lon });
+            } else {
+                // Force initialization if map not ready
+                debugLog('Map not ready - forcing initialization');
+                if (typeof ee !== 'undefined' && ee.initialize) {
+                    debugLog('Attempting immediate EE initialization');
+                    initializeEarthEngine();
+                    // Retry after a short delay
+                    setTimeout(() => {
+                        if (earthEngineMap) {
+                            debugLog('Retrying heatmap generation after forced init');
+                            triggerHeatmapFromCoords(coords);
+                        } else {
+                            showNotification('Map initialization failed');
+                            debugLog('Map initialization failed after retry');
+                        }
+                    }, 1500);
+                } else {
+                    debugLog('Forcing fallback map initialization');
+                    initializeFallbackMap();
+                    setTimeout(() => {
+                        if (earthEngineMap) {
+                            debugLog('Retrying heatmap generation with fallback map');
+                            generateFallbackHeatmap({ lat: coords.lat, lng: coords.lon });
+                        }
+                    }, 500);
+                }
+            }
+        }
+
+        // Helper: try geocoding with multiple public providers
+        async function geocodePlace(rawQuery) {
+            // Normalize common punctuation and abbreviations
+            const query = rawQuery
+                .replace(/D\.?C\.?/i, 'Washington DC')
+                .replace(/\s+/g, ' ') // collapse spaces
+                .trim();
+
+            const sources = [
+                (q) => ({
+                    url: `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q)}&limit=1&addressdetails=0`,
+                    parse: (data) => Array.isArray(data) && data.length > 0
+                        ? { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) } : null
+                }),
+                (q) => ({
+                    url: `https://geocode.maps.co/search?q=${encodeURIComponent(q)}&limit=1`, // Nominatim mirror
+                    parse: (data) => Array.isArray(data) && data.length > 0
+                        ? { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) } : null
+                }),
+                (q) => ({
+                    url: `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=1`,
+                    parse: (data) => (data && Array.isArray(data.features) && data.features.length > 0)
+                        ? { lat: parseFloat(data.features[0].geometry.coordinates[1]), lon: parseFloat(data.features[0].geometry.coordinates[0]) } : null
+                })
+            ];
+
+            for (const build of sources) {
+                try {
+                    const { url, parse } = build(query);
+                    debugLog(`Geocode try: ${url}`);
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 7000);
+                    const res = await fetch(url, {
+                        signal: controller.signal,
+                        mode: 'cors',
+                        headers: { 'accept': 'application/json' }
+                    });
+                    clearTimeout(timeoutId);
+                    if (!res.ok) { debugLog(`Geocode HTTP ${res.status}`); continue; }
+                    const data = await res.json();
+                    const result = parse(data);
+                    if (result && Number.isFinite(result.lat) && Number.isFinite(result.lon)) {
+                        return result;
+                    }
+                } catch (_) {
+                    debugLog('Geocode source failed');
+                    // try next
+                }
+            }
+            return null;
         }
     </script>
 </body>
