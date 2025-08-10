@@ -196,6 +196,49 @@
         .query-response:empty {
             display: none;
         }
+        
+        .earth-engine-code {
+            background: rgba(0, 0, 0, 0.7);
+            color: #e5e7eb;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-top: 8px;
+            max-height: 150px;
+            overflow-y: auto;
+            border-left: 3px solid #10b981;
+        }
+        
+        .map-visualization {
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(16, 185, 129, 0.1);
+            border-radius: 4px;
+            border-left: 3px solid #10b981;
+        }
+        
+        .example-queries {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #9ca3af;
+        }
+        
+        .example-query {
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 3px;
+            display: inline-block;
+            margin: 2px;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            transition: all 0.2s ease;
+        }
+        
+        .example-query:hover {
+            background: rgba(59, 130, 246, 0.3);
+            color: white;
+        }
 
         /* Geospatial Heatmap Container - Full Background */
         .geospatial-container {
@@ -699,9 +742,16 @@
         <!-- Query Text Box - Right Side -->
         <div id="query-container" class="query-container">
             <div class="query-header" style="text-align: center;">Ask a question about this location</div>
-            <textarea id="query-textarea" class="query-textarea" placeholder="e.g., What country is this? What landmarks can you see? What's the climate like here?"></textarea>
+            <textarea id="query-textarea" class="query-textarea" placeholder="e.g., Show me deforestation in Brazil from 2020-2023, Night-time lights trend over time, NDVI analysis for crops"></textarea>
+            <div class="example-queries">
+                <div style="font-weight: bold; margin-bottom: 4px;">Example Earth Engine Queries:</div>
+                <span class="example-query" onclick="setExampleQuery('Show me night-time lights trend over time')">Night-time lights trend</span>
+                <span class="example-query" onclick="setExampleQuery('Show deforestation in the Amazon from 2020-2023')">Amazon deforestation</span>
+                <span class="example-query" onclick="setExampleQuery('NDVI analysis using Landsat data for 2023')">NDVI analysis</span>
+                <span class="example-query" onclick="setExampleQuery('Sentinel-2 RGB composite for summer 2023')">Sentinel-2 imagery</span>
+            </div>
             <div style="display:flex; gap:8px; margin-top:12px;">
-                <button id="query-button" class="query-button" style="flex:1;">Send Query</button>
+                <button id="query-button" class="query-button" style="flex:1;">Run Earth Engine Query</button>
                 <button id="similarity-heatmap-btn" class="query-button" style="background:#10b981; flex:1;">Similarity Heatmap</button>
             </div>
             <div id="query-response" class="query-response"></div>
@@ -2888,40 +2938,28 @@
                 }
             }
 
-        // Function to submit a query about the current location
+        // Function to submit a query to Google Earth Engine
         function submitQuery() {
             const queryText = document.getElementById('query-textarea').value.trim();
             const queryButton = document.getElementById('query-button');
             const queryResponse = document.getElementById('query-response');
 
             if (!queryText) {
-                showNotification("Please enter a question");
-                return;
-            }
-
-            if (!currentImagePath) {
-                showNotification("No image loaded. Please wait for the next location.");
+                showNotification("Please enter an Earth Engine query");
                 return;
             }
 
             // Disable button and show loading state
             queryButton.disabled = true;
-            queryButton.textContent = "Sending...";
-            queryResponse.textContent = "Processing your query...";
+            queryButton.textContent = "Processing...";
+            queryResponse.innerHTML = "🌍 Converting query to Earth Engine code...";
 
-            // Prepare the query data
+            // Prepare the query data for Earth Engine
             const queryData = {
-                query: queryText,
-                image_path: currentImagePath,
-                full_image_path: fullImagePath
+                query: queryText
             };
 
-            // Add lobby ID if in multiplayer mode
-            if (lobbyId) {
-                queryData.lobby_id = lobbyId;
-            }
-
-            // Send the query to the server
+            // Send the query to the Earth Engine backend
             fetch('/submit_query', {
                 method: 'POST',
                 headers: {
@@ -2932,20 +2970,73 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    queryResponse.textContent = data.response;
+                    displayEarthEngineResults(data);
                 } else {
-                    queryResponse.textContent = "Error: " + (data.error || "Failed to process query");
+                    queryResponse.innerHTML = `<div style="color: #ef4444;">❌ Error: ${data.error || "Failed to process Earth Engine query"}</div>`;
                 }
             })
             .catch(error => {
-                console.error('Error submitting query:', error);
-                queryResponse.textContent = "Error: Failed to send query. Please try again.";
+                console.error('Error submitting Earth Engine query:', error);
+                queryResponse.innerHTML = `<div style="color: #ef4444;">❌ Network Error: Failed to send query. Please try again.</div>`;
             })
             .finally(() => {
                 // Re-enable button
                 queryButton.disabled = false;
-                queryButton.textContent = "Send Query";
+                queryButton.textContent = "Run Earth Engine Query";
             });
+        }
+
+        // Function to display Earth Engine results
+        function displayEarthEngineResults(data) {
+            const queryResponse = document.getElementById('query-response');
+            
+            let html = `<div style="color: #10b981; font-weight: bold;">✅ ${data.response}</div>`;
+            
+            // Show generated Earth Engine code
+            if (data.earth_engine_code) {
+                html += `
+                    <div style="margin-top: 8px;">
+                        <div style="font-weight: bold; color: #6b7280; margin-bottom: 4px;">Generated Earth Engine Code:</div>
+                        <div class="earth-engine-code">${data.earth_engine_code}</div>
+                    </div>
+                `;
+            }
+            
+            // Show map visualization info
+            if (data.map_data) {
+                html += `<div class="map-visualization">`;
+                html += `<div style="font-weight: bold; color: #10b981;">🗺️ Map Visualization Ready</div>`;
+                
+                if (data.map_data.layer_name) {
+                    html += `<div style="margin-top: 4px;">Layer: <strong>${data.map_data.layer_name}</strong></div>`;
+                }
+                
+                if (data.map_data.mapid && data.map_data.token) {
+                    html += `<div style="margin-top: 4px; font-size: 12px; color: #6b7280;">Map ID: ${data.map_data.mapid.substring(0, 20)}...</div>`;
+                    // Here you could add the map visualization to your existing map
+                    addEarthEngineLayerToMap(data.map_data);
+                } else if (data.map_data.note) {
+                    html += `<div style="margin-top: 4px; font-style: italic;">${data.map_data.note}</div>`;
+                }
+                
+                html += `</div>`;
+            }
+            
+            queryResponse.innerHTML = html;
+        }
+
+        // Function to add Earth Engine layer to the map (placeholder)
+        function addEarthEngineLayerToMap(mapData) {
+            console.log('Adding Earth Engine layer to map:', mapData);
+            // This would integrate with your existing mapping infrastructure
+            // For now, just log the data
+            showNotification("Earth Engine visualization ready! Check console for details.");
+        }
+
+        // Function to set example query text
+        function setExampleQuery(query) {
+            document.getElementById('query-textarea').value = query;
+            document.getElementById('query-textarea').focus();
         }
 
         // Function to clear query response when loading new image

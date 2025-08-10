@@ -179,3 +179,72 @@ Map.onClick(handleMapClick);
 Map.onChangeZoom(function (zoom) { return ui.url.set('zoom', zoom); });
 Map.style().set({ cursor: 'crosshair' });
 Map.setOptions('SATELLITE');
+
+// Extended functionality for dynamic Earth Engine layers
+var dynamicLayers = [];
+
+// Function to add a new Earth Engine layer from API response
+function addDynamicEarthEngineLayer(mapData) {
+  try {
+    // Clear previous dynamic layers
+    clearDynamicLayers();
+    
+    if (mapData.mapid && mapData.token) {
+      // Create the Earth Engine layer from map tiles
+      var tileSource = ee.layers.EarthEngineTileSource({
+        mapid: mapData.mapid,
+        token: mapData.token
+      });
+      
+      var layer = ui.Map.Layer(tileSource, {}, mapData.layer_name || 'Dynamic Layer');
+      
+      // Add to map
+      Map.layers().set(dynamicLayers.length + 2, layer); // Offset by existing layers
+      dynamicLayers.push(layer);
+      
+      console.log('Added dynamic Earth Engine layer:', mapData.layer_name);
+    } else {
+      console.log('Map data does not contain valid tile information');
+    }
+  } catch (error) {
+    console.error('Error adding dynamic Earth Engine layer:', error);
+  }
+}
+
+// Function to clear dynamic layers
+function clearDynamicLayers() {
+  dynamicLayers.forEach(function(layer, index) {
+    Map.layers().set(index + 2, null); // Clear from map
+  });
+  dynamicLayers = [];
+}
+
+// Function to toggle visibility of a dynamic layer
+function toggleDynamicLayer(index, visible) {
+  if (dynamicLayers[index]) {
+    var layer = dynamicLayers[index];
+    if (visible) {
+      Map.layers().set(index + 2, layer);
+    } else {
+      Map.layers().set(index + 2, null);
+    }
+  }
+}
+
+// Enhanced map center function for specific regions
+function centerMapOnRegion(regionName) {
+  var regions = {
+    'amazon': [-3.4, -60.0, 8],
+    'brazil': [-14.2, -51.9, 4],
+    'usa': [39.8, -98.5, 4],
+    'global': [0, 0, 2]
+  };
+  
+  var region = regions[regionName.toLowerCase()] || regions['global'];
+  Map.setCenter(region[1], region[0], region[2]);
+}
+
+// Export functions for use in HTML
+window.addDynamicEarthEngineLayer = addDynamicEarthEngineLayer;
+window.clearDynamicLayers = clearDynamicLayers;
+window.centerMapOnRegion = centerMapOnRegion;

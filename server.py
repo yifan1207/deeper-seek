@@ -1,0 +1,94 @@
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, FileResponse
+from pydantic import BaseModel
+import uvicorn
+import os
+from typing import Optional
+import logging
+
+from openai_query_converter import OpenAIQueryConverter
+from earth_engine_handler import EarthEngineHandler
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="Deeper Seek - Geospatial Query API", version="1.0.0")
+
+openai_converter = OpenAIQueryConverter()
+ee_handler = EarthEngineHandler()
+
+class QueryRequest(BaseModel):
+    query: str
+    image_path: Optional[str] = None
+    full_image_path: Optional[str] = None
+    lobby_id: Optional[str] = None
+
+class QueryResponse(BaseModel):
+    success: bool
+    response: Optional[str] = None
+    error: Optional[str] = None
+    earth_engine_code: Optional[str] = None
+    map_data: Optional[dict] = None
+
+@app.on_event("startup")
+async def startup_event():
+    try:
+        await ee_handler.initialize()
+        logger.info("Earth Engine initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize Earth Engine: {e}")
+
+@app.post("/submit_query", response_model=QueryResponse)
+async def submit_query(query_request: QueryRequest):
+    try:
+        logger.info(f"Processing query: {query_request.query}")
+        
+        # Convert natural language to Earth Engine code
+        ee_code = await openai_converter.convert_query_to_code(query_request.query)
+        
+        if not ee_code:
+            return QueryResponse(
+                success=False,
+                error="Failed to generate Earth Engine code from query"
+            )
+        
+        logger.info(f"Generated Earth Engine code: {ee_code[:200]}...")
+        
+        # Execute Earth Engine code and get visualization data
+        result = await ee_handler.execute_query(ee_code)
+        
+        if not result.get('success'):
+            return QueryResponse(
+                success=False,
+                error=f"Earth Engine execution failed: {result.get('error')}",
+                earth_engine_code=ee_code
+            )
+        
+        return QueryResponse(
+            success=True,
+            response=result.get('description', 'Query executed successfully'),
+            earth_engine_code=ee_code,
+            map_data=result.get('map_data')
+        )
+        
+    except Exception as e:
+        logger.error(f"Error processing query: {e}")
+        return QueryResponse(
+            success=False,
+            error=f"Internal server error: {str(e)}"
+        )
+
+@app.get("/")
+async def root():
+    return FileResponse("/Users/Yifan/deeper-seek/frontend_old/geoguessr.html")
+
+# Mount static files for frontend assets
+app.mount("/frontend_old", StaticFiles(directory="frontend_old"), name="frontend_old")
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "earth_engine": ee_handler.is_initialized()}
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
