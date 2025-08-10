@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Locamage GeoGuessr Challenge</title>
+    <title>DeepSeeker GeoGuessr Challenge</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- Font Awesome for icons -->
@@ -110,6 +110,84 @@
             z-index: 25 !important;
         }
 
+        /* Query text box styles */
+        .query-container {
+            position: absolute;
+            right: 24px;
+            top: 80px;
+            width: 384px; /* Same width as map (w-96 = 24rem = 384px) */
+            height: calc(100vh - 380px); /* Full height minus top space, map height, and bottom controls */
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 15;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+        }
+
+        .query-header {
+            font-weight: bold;
+            color: #374151;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        .query-textarea {
+            flex: 1;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 14px;
+            resize: none;
+            outline: none;
+            font-family: inherit;
+            background: white;
+        }
+
+        .query-textarea:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .query-button {
+            margin-top: 12px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .query-button:hover {
+            background: #2563eb;
+        }
+
+        .query-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .query-response {
+            margin-top: 12px;
+            padding: 12px;
+            background: #f3f4f6;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #374151;
+            max-height: 200px;
+            overflow-y: auto;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .query-response:empty {
+            display: none;
+        }
+
         /* Keep hover effects but respect enlarged state */
         .map-container:hover:not(.collapsed):not(.enlarged) {
             transform: scale(1.15);
@@ -185,6 +263,14 @@
                 right: 5vw;
             }
 
+            .query-container {
+                width: 80vw;
+                right: 10vw;
+                top: 70px;
+                height: calc(100vh - 300px);
+                z-index: 10;
+            }
+
             .controls-bar {
                 flex-direction: column;
                 align-items: center;
@@ -204,6 +290,29 @@
                 width: 90vw;
                 height: 35vh;
                 right: 5vw;
+            }
+
+            .query-container {
+                width: 90vw;
+                right: 5vw;
+                top: 60px;
+                height: calc(100vh - 280px);
+                padding: 12px;
+            }
+
+            .query-header {
+                font-size: 12px;
+                margin-bottom: 8px;
+            }
+
+            .query-textarea {
+                font-size: 12px;
+                padding: 8px;
+            }
+
+            .query-button {
+                padding: 6px 12px;
+                font-size: 12px;
             }
 
             .street-view-image {
@@ -321,7 +430,7 @@
             <div id="game-mode-selection" class="flex flex-col items-center space-y-4 mb-6">
                 <button id="single-player-btn"
                     class="w-64 py-3 bg-primary hover:bg-primary-dark text-white font-bold rounded-lg transition transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-50">
-                    1v1 vs Locamage
+                    1v1 vs DeepSeeker
                 </button>
                 <div class="text-gray-500">- or -</div>
                 <button id="multiplayer-btn"
@@ -400,7 +509,7 @@
             <div class="flex items-center space-x-4">
                 <div class="flex items-center">
                     <i class="fas fa-map-marker-alt text-yellow-400 text-2xl mr-2"></i>
-                    <h1 class="text-white text-lg font-semibold hidden sm:block">Locamage GeoGuessr</h1>
+                    <h1 class="text-white text-lg font-semibold hidden sm:block">DeepSeeker GeoGuessr</h1>
                 </div>
 
                 <!-- Round Indicator Dots -->
@@ -419,9 +528,17 @@
                     You: <span id="user-score" class="font-bold">0</span>
                 </div>
                 <div class="text-white">
-                    Locamage: <span id="ai-score" class="font-bold">0</span>
+                    DeepSeeker: <span id="ai-score" class="font-bold">0</span>
                 </div>
             </div>
+        </div>
+
+        <!-- Query Text Box - Right Side -->
+        <div id="query-container" class="query-container">
+            <div class="query-header">Ask a question about this location:</div>
+            <textarea id="query-textarea" class="query-textarea" placeholder="e.g., What country is this? What landmarks can you see? What's the climate like here?"></textarea>
+            <button id="query-button" class="query-button">Send Query</button>
+            <div id="query-response" class="query-response"></div>
         </div>
 
         <!-- Map Container - Bottom Right Corner with Toggle -->
@@ -510,7 +627,7 @@
                     <div id="final-user-score" class="text-4xl font-bold text-blue-600 my-2">0</div>
                 </div>
                 <div class="bg-purple-50 border-2 border-violet-500 rounded-lg p-4 text-center">
-                    <h3 class="text-lg font-semibold text-violet-700">Locamage Score</h3>
+                    <h3 class="text-lg font-semibold text-violet-700">DeepSeeker Score</h3>
                     <div id="final-ai-score" class="text-4xl font-bold text-violet-600 my-2">0</div>
                 </div>
             </div>
@@ -698,6 +815,9 @@
 
             // Remove enlarged class from map container
             document.getElementById('map-container').classList.remove('enlarged');
+
+            // Clear query response for new image
+            clearQueryResponse();
         }
 
         // Enhanced initializeSocket function with all necessary socket events for multiplayer
@@ -1474,6 +1594,14 @@
                     }
                 }
             });
+
+            // Add query functionality
+            document.getElementById('query-button').addEventListener('click', submitQuery);
+            document.getElementById('query-textarea').addEventListener('keydown', function(event) {
+                if (event.key === 'Enter' && event.ctrlKey) {
+                    submitQuery();
+                }
+            });
         });
 
         // Add functions to support the UI flow
@@ -1689,14 +1817,14 @@
 
             // Populate result card content - always show individual performance in the card
             document.getElementById('user-distance').textContent = `You: ${Math.round(data.user_distance)} km (${data.user_score} pts)`;
-            document.getElementById('model-distance').textContent = `Locamage: ${Math.round(data.model_distance)} km (${data.model_score} pts)`;
+            document.getElementById('model-distance').textContent = `DeepSeeker: ${Math.round(data.model_distance)} km (${data.model_score} pts)`;
 
             const winnerEl = document.getElementById('winner');
             if (data.winner === 'user') {
                 winnerEl.textContent = 'You win this round!';
                 winnerEl.className = 'text-center font-bold text-lg mt-3 pt-2 text-blue-600';
             } else if (data.winner === 'model') {
-                winnerEl.textContent = 'Locamage wins this round!';
+                winnerEl.textContent = 'DeepSeeker wins this round!';
                 winnerEl.className = 'text-center font-bold text-lg mt-3 pt-2 text-violet-600';
             } else {
                 winnerEl.textContent = "It's a tie!";
@@ -1783,7 +1911,7 @@
                         iconAnchor: [6, 6]
                     })
                 }).addTo(map);
-                modelMarker.bindTooltip("Locamage's Guess");
+                modelMarker.bindTooltip("DeepSeeker's Guess");
             }
         }
 
@@ -1801,7 +1929,7 @@
                 finalWinner.textContent = "Winner: You!";
                 finalWinner.className = 'text-xl font-bold text-center mb-4 text-blue-600';
             } else if (aiScore > userScore) {
-                finalWinner.textContent = "Winner: Locamage!";
+                finalWinner.textContent = "Winner: DeepSeeker!";
                 finalWinner.className = 'text-xl font-bold text-center mb-4 text-violet-600';
             } else {
                 finalWinner.textContent = "It's a tie!";
@@ -1818,11 +1946,11 @@
                 roundEl.innerHTML = `
                     <div class="flex justify-between items-center">
                         <span class="font-semibold">Round ${round.round}</span>
-                        <span>${round.winner === 'user' ? 'You win' : round.winner === 'model' ? 'Locamage wins' : 'Tie'}</span>
+                        <span>${round.winner === 'user' ? 'You win' : round.winner === 'model' ? 'DeepSeeker wins' : 'Tie'}</span>
                     </div>
                     <div class="grid grid-cols-2 gap-2 text-sm mt-1">
                         <div>You: ${round.userScore} pts (${round.userDistance} km)</div>
-                        <div>Locamage: ${round.aiScore} pts (${round.aiDistance} km)</div>
+                        <div>DeepSeeker: ${round.aiScore} pts (${round.aiDistance} km)</div>
                     </div>
                 `;
                 historyContainer.appendChild(roundEl);
@@ -1995,13 +2123,13 @@
                         // For multiplayer, show Team label and placeholder
                         userScoreLabel.innerHTML = `Team: <span id="user-score" class="font-bold">${pendingScoreDisplay}</span>`;
                         if (aiScoreLabel) {
-                            aiScoreLabel.innerHTML = `Locamage: <span id="ai-score" class="font-bold">${pendingScoreDisplay}</span>`;
+                            aiScoreLabel.innerHTML = `DeepSeeker: <span id="ai-score" class="font-bold">${pendingScoreDisplay}</span>`;
                         }
                     } else {
                         // For single player, show real scores immediately
                         userScoreLabel.innerHTML = `You: <span id="user-score" class="font-bold">0</span>`;
                         if (aiScoreLabel) {
-                            aiScoreLabel.innerHTML = `Locamage: <span id="ai-score" class="font-bold">0</span>`;
+                            aiScoreLabel.innerHTML = `DeepSeeker: <span id="ai-score" class="font-bold">0</span>`;
                         }
                     }
                 }
@@ -2170,6 +2298,74 @@
         // Add function to fetch and display available lobbies
         function fetchAvailableLobbies() {
             socket.emit('get_lobbies');
+        }
+
+        // Function to submit a query about the current location
+        function submitQuery() {
+            const queryText = document.getElementById('query-textarea').value.trim();
+            const queryButton = document.getElementById('query-button');
+            const queryResponse = document.getElementById('query-response');
+
+            if (!queryText) {
+                showNotification("Please enter a question");
+                return;
+            }
+
+            if (!currentImagePath) {
+                showNotification("No image loaded. Please wait for the next location.");
+                return;
+            }
+
+            // Disable button and show loading state
+            queryButton.disabled = true;
+            queryButton.textContent = "Sending...";
+            queryResponse.textContent = "Processing your query...";
+
+            // Prepare the query data
+            const queryData = {
+                query: queryText,
+                image_path: currentImagePath,
+                full_image_path: fullImagePath
+            };
+
+            // Add lobby ID if in multiplayer mode
+            if (lobbyId) {
+                queryData.lobby_id = lobbyId;
+            }
+
+            // Send the query to the server
+            fetch('/submit_query', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(queryData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    queryResponse.textContent = data.response;
+                } else {
+                    queryResponse.textContent = "Error: " + (data.error || "Failed to process query");
+                }
+            })
+            .catch(error => {
+                console.error('Error submitting query:', error);
+                queryResponse.textContent = "Error: Failed to send query. Please try again.";
+            })
+            .finally(() => {
+                // Re-enable button
+                queryButton.disabled = false;
+                queryButton.textContent = "Send Query";
+            });
+        }
+
+        // Function to clear query response when loading new image
+        function clearQueryResponse() {
+            const queryResponse = document.getElementById('query-response');
+            const queryTextarea = document.getElementById('query-textarea');
+            queryResponse.textContent = '';
+            queryTextarea.value = '';
         }
     </script>
 </body>
