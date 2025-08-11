@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earth Engine Query Interface</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/frontend/style.css">
+    
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🛰️</text></svg>" type="image/svg+xml">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🛰️ Earth Engine Query Interface</h1>
+            <p>Natural language queries for geospatial analysis powered by Google Earth Engine</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Query Panel -->
+            <section class="query-panel">
+                <div class="query-section">
+                    <label for="query-input" class="query-label">
+                        Enter your Earth Engine query:
+                    </label>
+                    <textarea 
+                        id="query-input" 
+                        class="query-input" 
+                        placeholder="e.g., Show me deforestation in the Amazon from 2020-2023"
+                        rows="3"
+                    ></textarea>
+                    
+                    <!-- Example Queries -->
+                    <div class="examples">
+                        <span class="examples-label">Examples:</span>
+                        <div class="example-buttons">
+                            <button class="example-btn" onclick="setQuery('Show me night-time lights trend over time')">
+                                Night-time lights trend
+                            </button>
+                            <button class="example-btn" onclick="setQuery('Deforestation in the Amazon from 2020-2023')">
+                                Amazon deforestation
+                            </button>
+                            <button class="example-btn" onclick="setQuery('NDVI analysis using Landsat data for 2023')">
+                                NDVI analysis
+                            </button>
+                            <button class="example-btn" onclick="setQuery('Sentinel-2 RGB composite for summer 2023')">
+                                Sentinel-2 imagery
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button id="submit-btn" class="submit-btn" onclick="submitQuery()">
+                        <span id="submit-text">🚀 Run Query</span>
+                    </button>
+                </div>
+
+                <!-- Results Section -->
+                <div class="results-section">
+                    <div id="results-container" class="results-container">
+                        <!-- Results will be displayed here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Map Panel -->
+            <section class="map-panel">
+                <div class="map-header">
+                    <h3>📍 Interactive Map</h3>
+                    <div class="map-controls">
+                        <button id="clear-layers-btn" class="control-btn" onclick="clearEarthEngineLayers()">
+                            Clear Layers
+                        </button>
+                    </div>
+                </div>
+                <div id="map-container" class="map-container">
+                    <div id="map" class="map"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Custom JavaScript -->
+    <script src="/frontend/script.js"></script>
+</body>
+</html>

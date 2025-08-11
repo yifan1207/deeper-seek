@@ -16,13 +16,15 @@ class EarthEngineHandler:
     
     async def initialize(self):
         try:
-            api_key = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+            service_account_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+            project_id = os.getenv('GOOGLE_CLOUD_PROJECT')
             
-            if api_key:
-                ee.Initialize(ee.ServiceAccountCredentials(email=None, key_data=api_key))
+            if service_account_path and os.path.exists(service_account_path):
+                credentials = ee.ServiceAccountCredentials(email=None, key_file=service_account_path)
+                ee.Initialize(credentials, project=project_id)
             else:
                 ee.Authenticate()
-                ee.Initialize()
+                ee.Initialize(project=project_id)
             
             self.initialized = True
             
@@ -83,9 +85,9 @@ class EarthEngineHandler:
                 linear_fit = collection_with_time.reduce(ee.Reducer.linearFit())
                 
                 vis_params = {
-                    'min': 0, 
-                    'max': [0.18, 20, -0.18], 
-                    'bands': ['scale', 'offset', 'scale']
+                    'min': [0, -20], 
+                    'max': [0.18, 20], 
+                    'bands': ['scale', 'offset']
                 }
                 
                 map_id = linear_fit.getMapId(vis_params)
@@ -95,7 +97,6 @@ class EarthEngineHandler:
                     'map_data': {
                         'mapid': map_id['mapid'],
                         'token': map_id['token'],
-                        'tile_url_template': map_id['tile_url_template'],
                         'vis_params': vis_params,
                         'layer_name': 'stable lights trend'
                     }
@@ -133,7 +134,6 @@ class EarthEngineHandler:
                     'map_data': {
                         'mapid': map_id['mapid'],
                         'token': map_id['token'],
-                        'tile_url_template': map_id['tile_url_template'],
                         'vis_params': vis_params,
                         'layer_name': 'NDVI 2023'
                     }
@@ -168,7 +168,6 @@ class EarthEngineHandler:
                     'map_data': {
                         'mapid': map_id['mapid'],
                         'token': map_id['token'],
-                        'tile_url_template': map_id['tile_url_template'],
                         'vis_params': vis_params,
                         'layer_name': 'Sentinel-2 RGB'
                     }

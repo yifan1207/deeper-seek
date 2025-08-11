@@ -14,16 +14,13 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Deeper Seek - Geospatial Query API", version="1.0.0")
+app = FastAPI(title="Earth Engine Query API", version="1.0.0")
 
 openai_converter = OpenAIQueryConverter()
 ee_handler = EarthEngineHandler()
 
 class QueryRequest(BaseModel):
     query: str
-    image_path: Optional[str] = None
-    full_image_path: Optional[str] = None
-    lobby_id: Optional[str] = None
 
 class QueryResponse(BaseModel):
     success: bool
@@ -80,9 +77,9 @@ async def submit_query(query_request: QueryRequest):
 
 @app.get("/")
 async def root():
-    return FileResponse("/Users/Yifan/deeper-seek/frontend_old/geoguessr.html")
+    return FileResponse("/Users/Yifan/deeper-seek/frontend/index.html")
 
-app.mount("/frontend_old", StaticFiles(directory="frontend_old"), name="frontend_old")
+app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
 
 @app.get("/health")
 async def health_check():
