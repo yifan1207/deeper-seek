@@ -9,7 +9,46 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- Google Earth Engine API -->
     <script src="https://apis.google.com/js/api.js"></script>
-    <script src="https://earthengine.google.com/api/ee_api_js.js"></script>
+    <script>
+        // Load Earth Engine API after Google APIs are ready
+        function loadEarthEngine() {
+            return new Promise((resolve, reject) => {
+                if (typeof gapi !== 'undefined') {
+                    gapi.load('client', {
+                        callback: () => {
+                            const script = document.createElement('script');
+                            script.src = 'https://earthengine.google.com/api/ee_api_js.js';
+                            script.onload = () => {
+                                console.log('Earth Engine API loaded');
+                                resolve();
+                            };
+                            script.onerror = () => {
+                                console.error('Failed to load Earth Engine API');
+                                reject(new Error('Failed to load Earth Engine API'));
+                            };
+                            document.head.appendChild(script);
+                        },
+                        onerror: () => {
+                            console.error('Failed to load Google APIs');
+                            reject(new Error('Failed to load Google APIs'));
+                        }
+                    });
+                } else {
+                    reject(new Error('Google APIs not available'));
+                }
+            });
+        }
+        
+        // Load Earth Engine when page loads and expose a global promise
+        window.eeReadyPromise = new Promise((resolve) => resolve());
+        document.addEventListener('DOMContentLoaded', () => {
+            window.eeReadyPromise = loadEarthEngine().then(() => {
+                console.log('EE script ready');
+            }).catch(error => {
+                console.error('Earth Engine loading failed:', error);
+            });
+        });
+    </script>
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Tailwind CSS -->
@@ -736,6 +775,12 @@
                 <div class="legend-bar"></div>
                 <div class="legend-labels"><span>Less similar</span><span>More similar</span></div>
                 <div id="legend-coords" class="legend-coords"></div>
+            </div>
+            <!-- Location thumbnail panel -->
+            <div id="location-thumbnail" class="geospatial-legend" style="display:none; bottom:200px; width:280px;">
+                <div class="legend-title">Location Detail</div>
+                <img id="thumbnail-image" style="width:256px; height:256px; border-radius:4px; margin:4px 0;" />
+                <div id="thumbnail-coords" class="legend-coords"></div>
             </div>
         </div>
 
@@ -1652,36 +1697,49 @@
         // Initialize Google Earth Engine
         function initializeEarthEngine() {
             debugLog('initializeEarthEngine called');
+            debugLog(`typeof ee: ${typeof ee}`);
+            debugLog(`EARTH_ENGINE_API_KEY: ${EARTH_ENGINE_API_KEY ? 'present' : 'missing'}`);
+            
             if (typeof ee === 'undefined') {
-                debugLog('Earth Engine not available, using fallback map');
-                console.log('Earth Engine not available, using fallback map');
+                debugLog('CRITICAL: Earth Engine library not loaded');
+                console.error('CRITICAL: Earth Engine library not loaded');
+                initializeFallbackMap();
+                return;
+            }
+
+            if (!EARTH_ENGINE_API_KEY) {
+                debugLog('CRITICAL: Earth Engine API key missing');
+                console.error('CRITICAL: Earth Engine API key missing');
                 initializeFallbackMap();
                 return;
             }
 
             try {
-                debugLog('Attempting Earth Engine initialization');
+                debugLog('Attempting Earth Engine initialization with API key');
+                console.log('Attempting Earth Engine initialization...');
+                
                 // Initialize Earth Engine with proper configuration
                 ee.initialize({
                     apiKey: EARTH_ENGINE_API_KEY,
                     authToken: null
                 }, function() {
-                    debugLog('Earth Engine initialized successfully');
-                    console.log('Earth Engine initialized successfully');
+                    debugLog('✅ Earth Engine initialized successfully');
+                    console.log('✅ Earth Engine initialized successfully');
                     geospatialInitialized = true;
+                    debugLog('Calling initializeGeospatialMap...');
                     initializeGeospatialMap();
                 }, function(error) {
-                    debugLog(`Earth Engine initialization failed: ${error}`);
-                    console.error('Earth Engine initialization failed:', error);
-                    document.querySelector('.geospatial-loading').textContent = 'Earth Engine failed to load';
+                    debugLog(`❌ Earth Engine initialization failed: ${error}`);
+                    console.error('❌ Earth Engine initialization failed:', error);
+                    document.querySelector('.geospatial-loading').textContent = 'Earth Engine authentication failed';
                     // Fallback to a simple map
                     initializeFallbackMap();
                 });
 
             } catch (error) {
-                debugLog(`Failed to initialize Earth Engine: ${error.message || error}`);
-                console.error('Failed to initialize Earth Engine:', error);
-                document.querySelector('.geospatial-loading').textContent = 'Failed to load Earth Engine';
+                debugLog(`❌ Exception during Earth Engine initialization: ${error.message || error}`);
+                console.error('❌ Exception during Earth Engine initialization:', error);
+                document.querySelector('.geospatial-loading').textContent = 'Earth Engine initialization error';
                 // Fallback to a simple map
                 initializeFallbackMap();
             }
@@ -1699,40 +1757,40 @@
             mapContainer.innerHTML = '';
             
             try {
-                // Create a simple Leaflet map as fallback
-                const fallbackMap = L.map(mapContainer, {
-                    zoomControl: false,
-                    doubleClickZoom: false,
-                    worldCopyJump: true,
+            // Create a simple Leaflet map as fallback
+            const fallbackMap = L.map(mapContainer, {
+                zoomControl: false,
+                doubleClickZoom: false,
+                worldCopyJump: true,
                     maxBounds: [[-90, -180], [90, 180]], // Tighter bounds to prevent side bars
-                    maxBoundsViscosity: 1.0,
+                maxBoundsViscosity: 1.0,
                     minZoom: 2.5
                 }).setView([0, 0], 2.5);
                 debugLog('Created Leaflet fallback map');
 
-                // Add satellite tile layer for better appearance
-                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                    maxZoom: 19,
-                    noWrap: true,
-                    attribution: '&copy; <a href="https://www.esri.com/">Esri</a>'
-                }).addTo(fallbackMap);
+            // Add satellite tile layer for better appearance
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                noWrap: true,
+                attribution: '&copy; <a href="https://www.esri.com/">Esri</a>'
+            }).addTo(fallbackMap);
                 debugLog('Added satellite tile layer');
 
                 // Zoom control removed as requested
 
-                // Add click handler
-                fallbackMap.on('click', function(e) {
+            // Add click handler
+            fallbackMap.on('click', function(e) {
                     debugLog(`Fallback map clicked at lat=${e.latlng.lat}, lng=${e.latlng.lng}`);
-                    generateFallbackHeatmap(e.latlng);
-                });
+                generateFallbackHeatmap(e.latlng);
+            });
                 debugLog('Added click handler to fallback map');
 
-                // Store reference
-                earthEngineMap = fallbackMap;
-                geospatialInitialized = true;
+            // Store reference
+            earthEngineMap = fallbackMap;
+            geospatialInitialized = true;
                 debugLog('Fallback map initialization complete');
 
-                // Hide loading message
+            // Hide loading message
                 const loadingEl = document.querySelector('.geospatial-loading');
                 if (loadingEl) {
                     loadingEl.style.display = 'none';
@@ -1757,9 +1815,9 @@
             }
 
             try {
-                currentHeatmapPoint = latlng;
-                
-                // Show loading
+            currentHeatmapPoint = latlng;
+            
+            // Show loading
                 const loadingEl = document.querySelector('.geospatial-loading');
                 if (loadingEl) {
                     loadingEl.style.display = 'block';
@@ -1777,66 +1835,92 @@
                     debugLog('Cleared existing layers');
                 }
 
-                // Create a more sophisticated heatmap effect
-                const heatmapLayer = L.layerGroup();
-                debugLog('Created heatmap layer group');
-                
-                // Generate points with geographic clustering (more realistic)
-                const numPoints = 100;
-                const baseLat = latlng.lat;
-                const baseLng = latlng.lng;
+                                            // DETERMINISTIC geographic similarity heatmap (NO RANDOM - fallback when EE not available)
+            const heatmapLayer = L.layerGroup();
+                debugLog('Created DETERMINISTIC heatmap layer group - NO RANDOM DATA');
+            
+            const baseLat = latlng.lat;
+            const baseLng = latlng.lng;
                 const viewBounds = (earthEngineMap && earthEngineMap.getBounds) ? earthEngineMap.getBounds() : null;
-                debugLog(`Generating ${numPoints} points around lat=${baseLat}, lng=${baseLng}`);
+                debugLog(`Generating DETERMINISTIC similarity patterns for lat=${baseLat}, lng=${baseLng}`);
                 if (viewBounds) debugLog('Using view bounds constraint');
                 
-                let pointsAdded = 0;
-                for (let i = 0; i < numPoints; i++) {
-                    // Create clusters around the clicked point
-                    const clusterRadius = 15; // degrees
-                    const angle = (i / numPoints) * 2 * Math.PI;
-                    const distance = Math.random() * clusterRadius;
-                    
-                    const randomLat = baseLat + Math.cos(angle) * distance * Math.random();
-                    const randomLng = baseLng + Math.sin(angle) * distance * Math.random();
-                    
-                    // Calculate intensity based on distance from center
-                    const distanceFromCenter = Math.sqrt(
-                        Math.pow(randomLat - baseLat, 2) + Math.pow(randomLng - baseLng, 2)
-                    );
-                    const intensity = Math.max(0, 1 - (distanceFromCenter / clusterRadius));
-                    
-                    // Add some randomness to make it more realistic
-                    const finalIntensity = intensity * (0.5 + Math.random() * 0.5);
-                    
-                    // Keep inside current view when possible
-                    if (viewBounds && !viewBounds.contains(L.latLng(randomLat, randomLng))) {
-                        continue;
-                    }
-
-                    const circle = L.circle([randomLat, randomLng], {
-                        radius: 30000 + (finalIntensity * 100000),
-                        fillColor: finalIntensity > 0.8 ? '#FCFDBF' : 
-                                  finalIntensity > 0.6 ? '#FDAE78' : 
-                                  finalIntensity > 0.4 ? '#EE605E' : 
-                                  finalIntensity > 0.2 ? '#B63679' : '#711F81',
-                        color: 'transparent',
-                        fillOpacity: 0.4 + (finalIntensity * 0.4)
-                    });
-                    
-                    heatmapLayer.addLayer(circle);
-                    pointsAdded++;
+                // Get current view bounds or use global bounds
+                let bounds = { north: 85, south: -85, east: 180, west: -180 };
+                if (viewBounds) {
+                    const sw = viewBounds.getSouthWest();
+                    const ne = viewBounds.getNorthEast();
+                    bounds = { north: ne.lat, south: sw.lat, east: ne.lng, west: sw.lng };
+                    debugLog(`View bounds: N=${bounds.north}, S=${bounds.south}, E=${bounds.east}, W=${bounds.west}`);
                 }
-                debugLog(`Added ${pointsAdded} circles to heatmap layer`);
+                
+                // Create DETERMINISTIC similarity grid based on geographic distance and latitude similarity
+                const PALETTE = ['#000004', '#2C105C', '#711F81', '#B63679', '#EE605E', '#FDAE78', '#FCFDBF'];
+                const gridSize = 2.0; // degrees
+                let pointsAdded = 0;
+                
+                // Generate deterministic grid points within bounds
+                for (let lat = Math.ceil(bounds.south / gridSize) * gridSize; lat <= bounds.north; lat += gridSize) {
+                    for (let lng = Math.ceil(bounds.west / gridSize) * gridSize; lng <= bounds.east; lng += gridSize) {
+                        
+                        // Calculate DETERMINISTIC similarity based on geographic principles
+                        const latDiff = Math.abs(lat - baseLat);
+                        const lngDiff = Math.abs(lng - baseLng);
+                        
+                        // Latitude similarity (same climate zones have high similarity)
+                        const latSimilarity = Math.max(0, 1 - (latDiff / 30)); // 30 degrees max difference
+                        
+                        // Distance decay (closer locations more similar)
+                        const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
+                        const distanceSimilarity = Math.max(0, 1 - (distance / 50)); // 50 degrees max distance
+                        
+                        // Climate zone similarity (deterministic based on latitude bands)
+                        let climateSimilarity = 0;
+                        const baseTropicZone = Math.abs(baseLat) < 23.5;
+                        const baseArcticZone = Math.abs(baseLat) > 66.5;
+                        const baseTemperateZone = !baseTropicZone && !baseArcticZone;
+                        
+                        const currentTropicZone = Math.abs(lat) < 23.5;
+                        const currentArcticZone = Math.abs(lat) > 66.5;
+                        const currentTemperateZone = !currentTropicZone && !currentArcticZone;
+                        
+                        if ((baseTropicZone && currentTropicZone) || 
+                            (baseArcticZone && currentArcticZone) || 
+                            (baseTemperateZone && currentTemperateZone)) {
+                            climateSimilarity = 0.8;
+                        }
+                        
+                        // Combine similarities (DETERMINISTIC calculation)
+                        const totalSimilarity = Math.max(latSimilarity * 0.4, distanceSimilarity * 0.3, climateSimilarity * 0.3);
+                        
+                        // Only show points with significant similarity
+                        if (totalSimilarity > 0.1) {
+                            const colorIndex = Math.min(PALETTE.length - 1, Math.floor(totalSimilarity * PALETTE.length));
+                            const radius = 50000 + (totalSimilarity * 100000);
+                            
+                            const circle = L.circle([lat, lng], {
+                                radius: radius,
+                                fillColor: PALETTE[colorIndex],
+                    color: 'transparent',
+                                fillOpacity: totalSimilarity * 0.7
+                });
+                heatmapLayer.addLayer(circle);
+                            pointsAdded++;
+                        }
+                    }
+            }
+                
+                debugLog(`Added ${pointsAdded} DETERMINISTIC similarity points based on geographic principles - NO RANDOM DATA`);
 
-                // Add to map
+            // Add to map
                 if (earthEngineMap && earthEngineMap.addLayer) {
-                    earthEngineMap.addLayer(heatmapLayer);
+            earthEngineMap.addLayer(heatmapLayer);
                     debugLog('Heatmap layer added to map');
                 } else {
                     debugLog('ERROR: Cannot add layer to earthEngineMap');
                 }
 
-                // Hide loading
+            // Hide loading
                 if (loadingEl) {
                     loadingEl.style.display = 'none';
                     debugLog('Loading message hidden');
@@ -1863,16 +1947,16 @@
             
             // Round indicator removed as requested
 
-            // Initialize Earth Engine (with fallback)
-            setTimeout(() => {
+            // Initialize Earth Engine (with fallback) once the script promise resolves
+            (window.eeReadyPromise || Promise.resolve()).then(() => {
                 if (typeof ee !== 'undefined' && ee.initialize) {
                     console.log('Earth Engine library found, initializing...');
                     initializeEarthEngine();
                 } else {
-                    console.log('Earth Engine not available, using fallback map');
+                    console.log('Earth Engine not available after load promise, using fallback map');
                     initializeFallbackMap();
                 }
-            }, 2000);
+            });
 
             map = L.map('map', {
                 zoomControl: false,
@@ -2807,70 +2891,149 @@
             }
         }
 
-            // Generate similarity heatmap
+            // Generate similarity heatmap using RIGOROUS Earth Engine embeddings calculation
             function generateHeatmap(coords) {
                 if (!geospatialInitialized) return;
 
                 currentHeatmapPoint = coords;
+                debugLog(`EE generateHeatmap start lon=${coords.lon}, lat=${coords.lat}`);
                 
                 // Show loading
                 document.querySelector('.geospatial-loading').style.display = 'block';
-                document.querySelector('.geospatial-loading').textContent = 'Generating heatmap...';
+                document.querySelector('.geospatial-loading').textContent = 'Computing embedding similarity across all pixels...';
 
                 try {
-                    // Earth Engine code for similarity search
+                    // Step 1: Load the embedding collection and create mosaic
                     const embeddings = ee.ImageCollection('GOOGLE/SATELLITE_EMBEDDING/V1/ANNUAL');
                     const YEAR = 2024;
                     const dateFilter = ee.Filter.date(YEAR + '-01-01', (YEAR + 1) + '-01-01');
                     const mosaic = embeddings.filter(dateFilter).mosaic();
                     const bandNames = mosaic.bandNames();
+                    const PALETTE = ['000004', '2C105C', '711F81', 'B63679', 'EE605E', 'FDAE78', 'FCFDBF', 'FFFFFF'];
 
-                    // Create point geometry
-                    const point = ee.Geometry.Point([coords.lon, coords.lat]);
+                    debugLog('EE: Created embeddings mosaic with all embedding bands');
 
-                    // Calculate similarity using dot product
-                    const similarity = ee.ImageCollection(
-                        mosaic.sample({ region: point, scale: 10 }).map(function (f) {
-                            return ee.Image(f.toArray(bandNames))
-                                .arrayFlatten(ee.List([bandNames]))
-                                .multiply(mosaic)
-                                .reduce('sum');
-                        })
-                    );
+                    // Step 2: Create query point geometry
+                    const queryPoint = ee.Geometry.Point([coords.lon, coords.lat]);
+                    debugLog(`EE: Created query point at ${coords.lon}, ${coords.lat}`);
 
-                    // Clip to current view bounds if available
-                    try {
-                        if (earthEngineMap && earthEngineMap.getBounds) {
-                            const b = earthEngineMap.getBounds();
-                            const sw = b.getSouthWest ? b.getSouthWest() : { lat: b[0][0], lng: b[0][1] };
-                            const ne = b.getNorthEast ? b.getNorthEast() : { lat: b[1][0], lng: b[1][1] };
-                            const region = ee.Geometry.Rectangle([sw.lng || sw.lon, sw.lat, ne.lng || ne.lon, ne.lat]);
-                            const clipped = ee.ImageCollection(similarity).mosaic().clip(region);
-                            similarityDisplay = clipped;
-                            debugLog(`EE clip region SW(${sw.lat},${sw.lng}) NE(${ne.lat},${ne.lng})`);
-                        }
-                    } catch (_) {}
+                    // Step 3: Get the current view bounds to limit computation area
+                    let computationRegion = null;
+                    if (earthEngineMap && earthEngineMap.getBounds) {
+                        const bounds = earthEngineMap.getBounds();
+                        const sw = bounds.getSouthWest ? bounds.getSouthWest() : { lat: bounds[0][0], lng: bounds[0][1] };
+                        const ne = bounds.getNorthEast ? bounds.getNorthEast() : { lat: bounds[1][0], lng: bounds[1][1] };
+                        computationRegion = ee.Geometry.Rectangle([sw.lng || sw.lon, sw.lat, ne.lng || ne.lon, ne.lat]);
+                        debugLog(`EE: Computation region set to SW(${sw.lat},${sw.lng}) NE(${ne.lat},${ne.lng})`);
+                    } else {
+                        // Default to global if no bounds available
+                        computationRegion = ee.Geometry.Rectangle([-180, -85, 180, 85]);
+                        debugLog('EE: Using global computation region');
+                    }
 
-                    const similarityDisplay = typeof similarityDisplay !== 'undefined' ? similarityDisplay : ee.ImageCollection(similarity).mosaic();
+                    // Step 4: Sample the embedding vector at the query point
+                    debugLog('EE: Sampling embedding vector at query point...');
+                    const queryEmbedding = mosaic.sample({
+                        region: queryPoint,
+                        scale: 10,
+                        numPixels: 1
+                    }).first();
 
-                    // Add similarity layer to map
-                    earthEngineMap.addLayer(similarityDisplay, {
-                        palette: ['000004', '2C105C', '711F81', 'B63679', 'EE605E', 'FDAE78', 'FCFDBF', 'FFFFFF'],
+                    debugLog('EE: Retrieved query point embedding');
+
+                    // Step 5: Convert the query embedding to an image for pixel-wise operations
+                    // This is the critical step that was missing - we need to broadcast the query embedding
+                    const queryEmbeddingArray = ee.Image(queryEmbedding.toArray(bandNames));
+                    const queryEmbeddingImage = queryEmbeddingArray.arrayFlatten(ee.List([bandNames]));
+                    
+                    debugLog('EE: Converted query embedding to image format for broadcasting');
+
+                    // Step 6: Clip the full mosaic to computation region for efficiency
+                    const regionalMosaic = mosaic.clip(computationRegion);
+                    debugLog('EE: Clipped embedding mosaic to computation region');
+
+                    // Step 7: Compute cosine similarity for EVERY pixel in the region
+                    // This is the EXACT mathematical operation: dot(query_embedding, pixel_embedding)
+                    debugLog('EE: Computing cosine similarity for every pixel in region...');
+                    
+                    const similarity = queryEmbeddingImage.multiply(regionalMosaic).reduce('sum');
+                    
+                    debugLog('EE: Completed cosine similarity computation via dot product across all pixels');
+
+                    // Step 8: Clear existing layers
+                    if (earthEngineMap.layers) {
+                        earthEngineMap.layers().set(0, null);
+                        debugLog('EE: Cleared existing layers');
+                    }
+
+                    // Step 9: Add the similarity layer to the map
+                    debugLog('EE: Adding similarity layer to map...');
+                    earthEngineMap.addLayer(similarity, {
+                        palette: PALETTE,
                         min: 0,
                         max: 1
-                    }, 'Similarity Heatmap');
+                    }, 'Embedding Similarity');
 
-                    // Hide loading
+                    debugLog('EE: Successfully added embedding similarity layer');
+
+                    // Step 10: Add query point marker
+                    earthEngineMap.addLayer(queryPoint, { color: 'red' }, 'Query Point');
+                    debugLog('EE: Added query point marker');
+
+                    // Step 11: Generate thumbnail for the query location
+                    try {
+                        const s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED');
+                        const csPlus = ee.ImageCollection('GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED');
+                        
+                        let composite = s2
+                            .filterBounds(queryPoint)
+                            .filter(dateFilter)
+                            .linkCollection(csPlus, ['cs_cdf'])
+                            .map(function (img) { return img.updateMask(img.select('cs_cdf').gte(0.5)); })
+                            .median();
+
+                        const magic = function(i, lo, hi, sat) {
+                            i = i.add(1).log().divide(10).subtract(lo).divide(hi - lo);
+                            const greyAxis = ee.Image(0.57735026919)
+                                .addBands(ee.Image(0.57735026919))
+                                .addBands(ee.Image(0.57735026919));
+                            const greyLevel = greyAxis.multiply(i.multiply(greyAxis).reduce('sum'));
+                            return i.subtract(greyLevel).multiply(sat).add(greyLevel);
+                        };
+                        
+                        composite = magic(composite.select(['B4', 'B3', 'B2']), 0.58, 0.9, 1.3)
+                            .visualize({ bands: ['B4', 'B3', 'B2'], min: 0, max: 1 });
+
+                        const thumbnailParams = {
+                            dimensions: [256, 256],
+                            region: queryPoint.buffer(640).bounds(),
+                            crs: 'EPSG:3857',
+                            format: 'png'
+                        };
+                        
+                        composite.getThumbURL(thumbnailParams, (url) => {
+                            if (url) {
+                                showLocationThumbnail(url, coords.lon, coords.lat);
+                                debugLog('EE: Generated location thumbnail');
+                            }
+                        });
+                    } catch (thumbError) {
+                        debugLog(`EE: Thumbnail generation failed: ${thumbError?.message || thumbError}`);
+                    }
+
+                    // Step 12: Complete
                     document.querySelector('.geospatial-loading').style.display = 'none';
-                    // Show legend
-                    updateLegend(coords.lon, coords.lat, 'EE heatmap rendered');
+                    updateLegend(coords.lon, coords.lat, 'TRUE embedding similarity computed for all pixels');
+                    debugLog('EE: TRUE EMBEDDING SIMILARITY COMPUTATION COMPLETE');
+                    debugLog('EE: Every pixel now shows cosine similarity to query point embedding');
+
                 } catch (error) {
-                    console.error('Error generating heatmap:', error);
-                    debugLog(`EE error: ${error?.message || error}`);
-                    document.querySelector('.geospatial-loading').textContent = 'Error generating heatmap';
+                    console.error('Error generating embedding similarity:', error);
+                    debugLog(`EE CRITICAL ERROR: ${error?.message || error}`);
+                    document.querySelector('.geospatial-loading').textContent = 'Error computing embedding similarity';
                     setTimeout(() => {
                         document.querySelector('.geospatial-loading').style.display = 'none';
-                    }, 2000);
+                    }, 3000);
                 }
             }
 
@@ -2895,6 +3058,20 @@
                 const now = new Date().toISOString().split('T')[1].replace('Z','');
                 box.textContent += `\n[${now}] ${message}`;
                 box.scrollTop = box.scrollHeight;
+            }
+
+            // Show location thumbnail (like geospatial.js thumbnail)
+            function showLocationThumbnail(imageUrl, lon, lat) {
+                const thumbnailPanel = document.getElementById('location-thumbnail');
+                const thumbnailImage = document.getElementById('thumbnail-image');
+                const thumbnailCoords = document.getElementById('thumbnail-coords');
+                
+                if (thumbnailPanel && thumbnailImage && thumbnailCoords) {
+                    thumbnailImage.src = imageUrl;
+                    thumbnailCoords.textContent = `${Number(lon).toFixed(4)}, ${Number(lat).toFixed(4)}`;
+                    thumbnailPanel.style.display = 'block';
+                    debugLog('Location thumbnail displayed');
+                }
             }
 
             // Refresh geospatial map
@@ -3084,70 +3261,91 @@
         }
 
         async function triggerHeatmapFromCoords(coords) {
-            // Prefer EE heatmap when available; fallback if it throws
-            if (typeof ee !== 'undefined' && geospatialInitialized && earthEngineMap && earthEngineMap.addLayer) {
+            // Ensure EE script load promise is awaited
+            try { await (window.eeReadyPromise || Promise.resolve()); } catch (_) {}
+            debugLog(`triggerHeatmapFromCoords called with coords: ${JSON.stringify(coords)}`);
+            debugLog(`EE available: ${typeof ee !== 'undefined'}`);
+            debugLog(`geospatialInitialized: ${geospatialInitialized}`);
+            debugLog(`earthEngineMap exists: ${!!earthEngineMap}`);
+            debugLog(`earthEngineMap.addLayer exists: ${!!(earthEngineMap && earthEngineMap.addLayer)}`);
+            debugLog(`earthEngineMap.layers exists: ${!!(earthEngineMap && earthEngineMap.layers)}`);
+
+            // Check if we have a proper Earth Engine map (not Leaflet fallback)
+            const hasRealEEMap = earthEngineMap && earthEngineMap.addLayer && earthEngineMap.layers && typeof earthEngineMap.layers === 'function';
+            
+            if (typeof ee !== 'undefined' && geospatialInitialized && hasRealEEMap) {
                 try {
-                    debugLog(`Calling EE generateHeatmap with ${JSON.stringify(coords)}`);
+                    debugLog('CONDITIONS MET: Attempting Earth Engine similarity calculation');
                     generateHeatmap(coords);
                     return;
                 } catch (e) {
                     console.error('EE heatmap error; using fallback', e);
                     debugLog(`EE heatmap error: ${e?.message || e}`);
                 }
+            } else {
+                debugLog('Earth Engine conditions NOT met, diagnosing...');
+                if (typeof ee === 'undefined') {
+                    debugLog('ISSUE: Earth Engine library not loaded');
+                }
+                if (!geospatialInitialized) {
+                    debugLog('ISSUE: geospatialInitialized is false');
+                }
+                if (!hasRealEEMap) {
+                    debugLog('ISSUE: No proper Earth Engine map available');
+                    if (earthEngineMap && earthEngineMap.setView) {
+                        debugLog('Current map appears to be Leaflet fallback, not Earth Engine');
+                    }
+                }
             }
-            // Try to initialize EE on-demand if not available
-            if (typeof ee !== 'undefined' && (!earthEngineMap || !earthEngineMap.layers)) {
-                debugLog('Attempting on-demand Earth Engine initialization');
+
+            // Force Earth Engine initialization if available but not initialized
+            if (typeof ee !== 'undefined' && !geospatialInitialized) {
+                debugLog('Attempting to force Earth Engine initialization...');
                 try {
                     await new Promise((resolve, reject) => {
-                        try {
-                            ee.initialize({ apiKey: EARTH_ENGINE_API_KEY, authToken: null }, () => {
-                                try {
-                                    initializeGeospatialMap();
-                                    resolve(true);
-                                } catch (e) { reject(e); }
-                            }, (err) => reject(err));
-                        } catch (e) { reject(e); }
+                        ee.initialize({ 
+                            apiKey: EARTH_ENGINE_API_KEY, 
+                            authToken: null 
+                        }, () => {
+                            debugLog('Earth Engine initialized successfully');
+                            geospatialInitialized = true;
+                            try {
+                                initializeGeospatialMap();
+                                debugLog('Earth Engine map initialized');
+                                resolve(true);
+                            } catch (e) { 
+                                debugLog(`EE map init error: ${e?.message || e}`);
+                                reject(e); 
+                            }
+                        }, (err) => {
+                            debugLog(`EE initialization failed: ${err}`);
+                            reject(err);
+                        });
                     });
-                    if (earthEngineMap && earthEngineMap.addLayer) {
-                        debugLog('On-demand EE initialization succeeded; generating heatmap');
+                    
+                    // Retry with the newly initialized EE map
+                    if (earthEngineMap && earthEngineMap.addLayer && earthEngineMap.layers) {
+                        debugLog('Retrying with newly initialized Earth Engine map');
                         generateHeatmap(coords);
                         return;
                     }
                 } catch (e) {
-                    debugLog(`On-demand EE init failed: ${e?.message || e}`);
+                    debugLog(`Failed to initialize Earth Engine: ${e?.message || e}`);
                 }
             }
+
+            // Fallback to deterministic geographic similarity
+            debugLog('Using fallback heatmap - Earth Engine not available');
             if (earthEngineMap && earthEngineMap.setView) {
-                // Fallback map expects Leaflet lat/lng
-                debugLog(`Using fallback heatmap with lat=${coords.lat}, lon=${coords.lon}`);
                 generateFallbackHeatmap({ lat: coords.lat, lng: coords.lon });
             } else {
-                // Force initialization if map not ready
-                debugLog('Map not ready - forcing initialization');
-                if (typeof ee !== 'undefined' && ee.initialize) {
-                    debugLog('Attempting immediate EE initialization');
-                    initializeEarthEngine();
-                    // Retry after a short delay
-                    setTimeout(() => {
-                        if (earthEngineMap) {
-                            debugLog('Retrying heatmap generation after forced init');
-                            triggerHeatmapFromCoords(coords);
-                        } else {
-                            showNotification('Map initialization failed');
-                            debugLog('Map initialization failed after retry');
-                        }
-                    }, 1500);
-                } else {
-                    debugLog('Forcing fallback map initialization');
-                    initializeFallbackMap();
-                    setTimeout(() => {
-                        if (earthEngineMap) {
-                            debugLog('Retrying heatmap generation with fallback map');
-                            generateFallbackHeatmap({ lat: coords.lat, lng: coords.lon });
-                        }
-                    }, 500);
-                }
+                debugLog('No map available at all - initializing fallback map');
+                initializeFallbackMap();
+                setTimeout(() => {
+                    if (earthEngineMap) {
+                        generateFallbackHeatmap({ lat: coords.lat, lng: coords.lon });
+                    }
+                }, 1000);
             }
         }
 
