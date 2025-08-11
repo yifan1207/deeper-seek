@@ -50,9 +50,11 @@ async def index():
 
 @app.get("/{filename:path}")
 async def serve_static(filename: str):
-    try:
-        return FileResponse(f"frontend_old/{filename}")
-    except Exception:
+    import os
+    file_path = f"frontend_old/{filename}"
+    if os.path.exists(file_path) and os.path.isfile(file_path):
+        return FileResponse(file_path)
+    else:
         raise HTTPException(status_code=404, detail="File not found")
 
 @app.post("/submit_query", response_model=QueryResponse)
