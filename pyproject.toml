@@ -4,4 +4,18 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "earthengine-api>=1.6.2",
+    "huggingface-hub>=0.34.4",
+    "jax[tpu]>=0.7.0",
+    "jimm",
+    "pandarallel>=1.6.5",
+    "pandas>=2.3.1",
+    "polars>=1.32.2",
+    "tensorflow>=2.19.0",
+    "tensorflow-io>=0.37.1",
+    "torch>=2.8.0",
+]
+
+[tool.uv.sources]
+jimm = { git = "https://github.com/Locamage/jimm.git" }
